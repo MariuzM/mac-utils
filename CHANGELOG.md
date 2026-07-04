@@ -5,6 +5,13 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-07-04
+
+### Added
+
+- Per-drive search for `node_modules` folders, grouped into a separate category for each location
+  (the folder that contains the projects).
+
 ## [0.1.0] - 2026-07-04
 
 Initial release.
@@ -21,4 +28,5 @@ Initial release.
 - Console with live output, working Cancel, and a watchdog for long operations.
 - Spotlight Privacy tab.
 
+[0.2.0]: https://github.com/MariuzM/macos-utility/releases/tag/v0.2.0
 [0.1.0]: https://github.com/MariuzM/macos-utility/releases/tag/v0.1.0

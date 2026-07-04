@@ -33,7 +33,7 @@ actor ScanEngine {
 
     func scan(progress: @escaping @Sendable (ScanProgress) -> Void) async -> [VolumeResult] {
         progress(ScanProgress(phase: "Enumerating…", fraction: 0))
-        let scaffolds = buildScaffolds()
+        let scaffolds = buildScaffolds(progress: progress)
 
         var jobs: [SizeJob] = []
         for vol in scaffolds {
@@ -108,24 +108,88 @@ actor ScanEngine {
         return results
     }
 
-    private func buildScaffolds() -> [VolumeScaffold] {
+    private func buildScaffolds(progress: @escaping @Sendable (ScanProgress) -> Void) -> [VolumeScaffold] {
         let boot = bootVolumeURL()
         let volumes = mountedVolumes()
+        let home = fm.homeDirectoryForCurrentUser
 
         var scaffolds: [VolumeScaffold] = []
 
-        let bootRules = ScanRules.homeRules() + ScanRules.systemRules()
+        progress(ScanProgress(phase: "Finding node_modules…", fraction: 0))
+        var bootRules = ScanRules.homeRules() + ScanRules.systemRules()
+        bootRules += nodeModulesRules(under: home, root: home)
         scaffolds.append(VolumeScaffold(name: volumeName(boot) + " (Startup)",
                                         url: boot,
                                         isBoot: true,
                                         rules: bootRules.map { scaffold(for: $0) }))
 
         for v in volumes where v.path != boot.path {
-            let rules = ScanRules.volumeRules(for: v).map { scaffold(for: $0) }
-            scaffolds.append(VolumeScaffold(name: volumeName(v), url: v, isBoot: false, rules: rules))
+            var rules = ScanRules.volumeRules(for: v)
+            rules += nodeModulesRules(under: v, root: v)
+            scaffolds.append(VolumeScaffold(name: volumeName(v), url: v, isBoot: false,
+                                            rules: rules.map { scaffold(for: $0) }))
         }
 
         return scaffolds
+    }
+
+    private func nodeModulesRules(under searchRoot: URL, root: URL) -> [ScanRule] {
+        let found = findNodeModules(under: searchRoot)
+        guard !found.isEmpty else { return [] }
+
+        var groups: [String: [URL]] = [:]
+        for nm in found {
+            let container = nm.deletingLastPathComponent().deletingLastPathComponent()
+            groups[container.path, default: []].append(nm)
+        }
+
+        return groups.sorted { $0.key < $1.key }.map { key, urls in
+            let count = urls.count
+            return ScanRule(id: "node-modules:\(key)",
+                            title: "node_modules · \(relativeLabel(key, root: root))",
+                            subtitle: "\(count) project\(count == 1 ? "" : "s") in \(key)",
+                            safety: .safe,
+                            paths: urls.sorted { $0.path < $1.path },
+                            expandChildren: false)
+        }
+    }
+
+    private func findNodeModules(under root: URL, maxDepth: Int = 8) -> [URL] {
+        guard isDirectory(root) else { return [] }
+        let keys: [URLResourceKey] = [.isDirectoryKey, .isSymbolicLinkKey]
+        guard let en = fm.enumerator(at: root,
+                                     includingPropertiesForKeys: keys,
+                                     options: [.skipsHiddenFiles, .skipsPackageDescendants],
+                                     errorHandler: { _, _ in true }) else {
+            return []
+        }
+
+        var results: [URL] = []
+        var counter = 0
+        for case let url as URL in en {
+            counter += 1
+            if counter & 0x3FF == 0, Task.isCancelled { break }
+            if en.level > maxDepth { en.skipDescendants(); continue }
+            let name = url.lastPathComponent
+            let values = try? url.resourceValues(forKeys: Set(keys))
+            guard values?.isDirectory == true, values?.isSymbolicLink != true else { continue }
+            if name == "node_modules" {
+                results.append(url)
+                en.skipDescendants()
+            } else if name == "Library" {
+                en.skipDescendants()
+            }
+        }
+        return results
+    }
+
+    private func relativeLabel(_ containerPath: String, root: URL) -> String {
+        let rootPath = root.standardizedFileURL.path
+        if containerPath == rootPath { return root.lastPathComponent }
+        if containerPath.hasPrefix(rootPath + "/") {
+            return String(containerPath.dropFirst(rootPath.count + 1))
+        }
+        return containerPath
     }
 
     private func scaffold(for rule: ScanRule) -> RuleScaffold {

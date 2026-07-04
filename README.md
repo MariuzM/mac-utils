@@ -9,6 +9,8 @@ or delete it.
 - **Scan** all volumes in parallel; results grouped by drive → User Files / System Files → category →
   item, each with size, path, and a safety badge. Check the categories you want and act on the
   selection.
+- **node_modules** folders are searched per drive and grouped by the folder that contains the
+  projects, so each location is its own category.
 - **Back up** to `~/Desktop/macOS Utility Backup <timestamp>/`, keeping each item's original path so
   you can see where it came from.
 - **Delete** via Move to Trash or permanent delete. Protected items are handled the right way —
