@@ -5,6 +5,23 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-07-13
+
+### Added
+
+- Rekey section: remap keyboard keys (e.g. F-keys to brightness, volume, mute, playback) via
+  macOS's native `hidutil`, with an optional startup daemon that re-applies mappings at every
+  boot. Merged from the standalone macos-rekey app.
+
+### Changed
+
+- Top tab bar replaced with a left sidebar, with a smoothly animated show/hide toggle (⌃⌘S).
+- Bundle identifier renamed from `dev.marius.macosutility` to `mariuzm.macosutility` —
+  re-grant Full Disk Access after updating.
+- The Rekey startup daemon installs as `mariuzm.rekey.plist`.
+- `build.sh` replaced by a Makefile (`make dev`, `make build`, `make r`, `make clean`,
+  `make status`, `make reset`); release bundles now build into `build/` instead of `dist/`.
+
 ## [0.2.0] - 2026-07-04
 
 ### Added
