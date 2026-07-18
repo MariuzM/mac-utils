@@ -15,7 +15,7 @@ struct RekeyView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach($store.mappings) { $mapping in
-                        MappingRow(mapping: $mapping) {
+                        MappingRow(mapping: $mapping, onChange: { store.commit() }) {
                             store.remove(mapping)
                         }
                     }
@@ -53,10 +53,37 @@ struct RekeyView: View {
                     }
                 }
 
-                if let status = store.status {
-                    Text(status)
+                if store.hasLegacyDaemon {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .foregroundStyle(.orange)
+                        Text("An older rekey daemon is still installed")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Button("Remove") { store.removeLegacyDaemon() }
+                            .controlSize(.small)
+                    }
+                }
+
+                if let warning = store.conflictWarning {
+                    Text(warning)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.orange)
+                }
+
+                if let status = store.status {
+                    HStack(spacing: 6) {
+                        Text(status)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Button {
+                            store.status = nil
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.tertiary)
+                    }
                 }
             }
             .padding(20)
@@ -68,6 +95,7 @@ struct RekeyView: View {
 
 struct MappingRow: View {
     @Binding var mapping: KeyMapping
+    let onChange: () -> Void
     let onDelete: () -> Void
 
     var body: some View {
@@ -78,6 +106,7 @@ struct MappingRow: View {
                 }
             }
             .labelsHidden()
+            .onChange(of: mapping.source) { _ in onChange() }
 
             Image(systemName: "arrow.right")
                 .foregroundStyle(.secondary)
@@ -88,6 +117,7 @@ struct MappingRow: View {
                 }
             }
             .labelsHidden()
+            .onChange(of: mapping.destination) { _ in onChange() }
 
             Button(role: .destructive, action: onDelete) {
                 Image(systemName: "trash")

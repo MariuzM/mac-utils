@@ -2,15 +2,18 @@ import Foundation
 
 @MainActor
 final class MappingStore: ObservableObject {
-    @Published var mappings: [KeyMapping] = [] {
-        didSet {
-            save()
-            refreshStartupState()
-        }
-    }
+    @Published var mappings: [KeyMapping] = []
     @Published var status: String?
     @Published var startupEnabled = false
     @Published var startupStale = false
+    @Published var hasLegacyDaemon = false
+
+    private var unreadableOnDisk = false
+
+    func commit() {
+        save()
+        refreshStartupState()
+    }
 
     private let fileURL: URL = {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -38,11 +41,38 @@ final class MappingStore: ObservableObject {
     }
 
     func add() {
-        mappings.append(KeyMapping(source: Keys.sources[0], destination: Keys.destinations[0]))
+        let used = Set(mappings.map(\.source.usage))
+        let source = Keys.sources.first { !used.contains($0.usage) } ?? Keys.sources[0]
+        let destination = Keys.destinations.first { $0.usage != source.usage } ?? Keys.destinations[0]
+        mappings.append(KeyMapping(source: source, destination: destination))
+        commit()
     }
 
     func remove(_ mapping: KeyMapping) {
         mappings.removeAll { $0.id == mapping.id }
+        commit()
+    }
+
+    var duplicateSources: [String] {
+        Dictionary(grouping: mappings, by: \.source.usage)
+            .filter { $0.value.count > 1 }
+            .compactMap { $0.value.first?.source.name }
+            .sorted()
+    }
+
+    var selfMappings: [String] {
+        mappings.filter { $0.source.usage == $0.destination.usage }.map(\.source.name).sorted()
+    }
+
+    var conflictWarning: String? {
+        var parts: [String] = []
+        if !duplicateSources.isEmpty {
+            parts.append("Duplicate source keys (only the last takes effect): \(duplicateSources.joined(separator: ", "))")
+        }
+        if !selfMappings.isEmpty {
+            parts.append("Keys mapped to themselves: \(selfMappings.joined(separator: ", "))")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: "\n")
     }
 
     func apply() {
@@ -88,23 +118,60 @@ final class MappingStore: ObservableObject {
         refreshStartupState()
     }
 
+    func removeLegacyDaemon() {
+        do {
+            try LaunchDaemon.removeLegacyDaemons()
+            status = "Removed the old rekey daemon"
+        } catch let e {
+            status = e.localizedDescription
+        }
+        refreshStartupState()
+    }
+
     private func refreshStartupState() {
         startupEnabled = LaunchDaemon.isInstalled
         startupStale = startupEnabled && LaunchDaemon.isStale(for: mappings)
+        hasLegacyDaemon = !LaunchDaemon.installedLegacyLabels.isEmpty
+    }
+
+    private struct LossyMapping: Decodable {
+        let mapping: KeyMapping?
+
+        init(from decoder: Decoder) throws {
+            mapping = try? KeyMapping(from: decoder)
+        }
     }
 
     private func load() {
-        guard let data = try? Data(contentsOf: fileURL),
-              let decoded = try? JSONDecoder().decode([KeyMapping].self, from: data)
-        else {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
             mappings = Self.defaultMappings
             return
         }
-        mappings = decoded
+        guard let data = try? Data(contentsOf: fileURL),
+              let decoded = try? JSONDecoder().decode([LossyMapping].self, from: data)
+        else {
+            unreadableOnDisk = true
+            status = "Saved mappings could not be read. The existing file is left untouched — "
+                + "fix or remove it before editing, or it will be overwritten."
+            return
+        }
+        let usable = decoded.compactMap(\.mapping)
+        if usable.count < decoded.count {
+            status = "\(decoded.count - usable.count) saved mapping(s) referenced keys this version no longer knows and were dropped."
+        }
+        mappings = usable
     }
 
     private func save() {
+        guard !unreadableOnDisk else {
+            status = "Not saving — the existing mappings file could not be read. Fix or remove it first."
+            return
+        }
         guard let data = try? JSONEncoder().encode(mappings) else { return }
-        try? data.write(to: fileURL)
+        do {
+            try data.write(to: fileURL)
+        } catch {
+            status = "Could not save mappings: \(error.localizedDescription)"
+        }
     }
 }

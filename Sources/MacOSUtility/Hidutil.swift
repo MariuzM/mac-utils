@@ -26,47 +26,25 @@ enum Hidutil {
         try run(["property", "--set", "{\"UserKeyMapping\":[]}"])
     }
 
-    static func launchDaemonPlist(for mappings: [KeyMapping], label: String) -> String {
-        """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-        <plist version="1.0">
-        <dict>
-            <key>Label</key>
-            <string>\(label)</string>
-            <key>ProgramArguments</key>
-            <array>
-                <string>/usr/bin/hidutil</string>
-                <string>property</string>
-                <string>--set</string>
-                <string>\(payload(for: mappings).replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;"))</string>
-            </array>
-            <key>RunAtLoad</key>
-            <true/>
-        </dict>
-        </plist>
-        """
+    static func launchDaemonArguments(for mappings: [KeyMapping]) -> [String] {
+        [SystemPaths.hidutil, "property", "--set", payload(for: mappings)]
+    }
+
+    static func launchDaemonPlist(for mappings: [KeyMapping], label: String) throws -> Data {
+        let plist: [String: Any] = [
+            "Label": label,
+            "ProgramArguments": launchDaemonArguments(for: mappings),
+            "RunAtLoad": true,
+        ]
+        return try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
     }
 
     @discardableResult
     private static func run(_ arguments: [String]) throws -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/hidutil")
-        process.arguments = arguments
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-
-        try process.run()
-        process.waitUntilExit()
-
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let output = String(data: data, encoding: .utf8) ?? ""
-
-        guard process.terminationStatus == 0 else {
-            throw HidutilError.commandFailed(output)
+        let result = Shell.run(SystemPaths.hidutil, arguments)
+        guard result.succeeded else {
+            throw HidutilError.commandFailed(result.combined.trimmingCharacters(in: .whitespacesAndNewlines))
         }
-        return output
+        return result.stdout
     }
 }

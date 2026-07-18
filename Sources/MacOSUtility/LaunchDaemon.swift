@@ -14,34 +14,73 @@ enum LaunchDaemonError: LocalizedError {
 
 @MainActor
 enum LaunchDaemon {
-    static let label = "mariuzm.rekey"
-    static let installPath = "/Library/LaunchDaemons/mariuzm.rekey.plist"
+    static let label = "dev.marius.macosutility.rekey"
+    static let installPath = "/Library/LaunchDaemons/dev.marius.macosutility.rekey.plist"
+
+    static let legacyLabels = ["mariuzm.rekey", "dev.marius.rekey"]
+
+    private static func plistPath(for label: String) -> String {
+        "/Library/LaunchDaemons/\(label).plist"
+    }
 
     static var isInstalled: Bool {
         FileManager.default.fileExists(atPath: installPath)
     }
 
+    static var installedLegacyLabels: [String] {
+        legacyLabels.filter { FileManager.default.fileExists(atPath: plistPath(for: $0)) }
+    }
+
     static func isStale(for mappings: [KeyMapping]) -> Bool {
-        guard let installed = try? String(contentsOfFile: installPath, encoding: .utf8) else { return false }
-        return installed != Hidutil.launchDaemonPlist(for: mappings, label: label)
+        guard let data = FileManager.default.contents(atPath: installPath),
+              let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
+              let arguments = plist["ProgramArguments"] as? [String]
+        else { return false }
+        return arguments != Hidutil.launchDaemonArguments(for: mappings)
     }
 
     static func install(_ mappings: [KeyMapping]) throws {
-        let content = Hidutil.launchDaemonPlist(for: mappings, label: label)
+        let content = try Hidutil.launchDaemonPlist(for: mappings, label: label)
         let stagingURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(label).plist")
-        try content.write(to: stagingURL, atomically: true, encoding: .utf8)
-        try runPrivileged("cp '\(stagingURL.path)' '\(installPath)' && chown root:wheel '\(installPath)' && chmod 644 '\(installPath)' && (launchctl bootout system/\(label) 2>/dev/null || true) && launchctl bootstrap system '\(installPath)'")
+        try content.write(to: stagingURL, options: .atomic)
+
+        let steps = legacyRemovalSteps() + [
+            "cp \(Shell.quote(stagingURL.path)) \(Shell.quote(installPath))",
+            "chown root:wheel \(Shell.quote(installPath))",
+            "chmod 644 \(Shell.quote(installPath))",
+            "(launchctl bootout system/\(label) 2>/dev/null || true)",
+            "launchctl bootstrap system \(Shell.quote(installPath))",
+        ]
+        try runPrivileged(steps.joined(separator: " && "))
     }
 
     static func uninstall() throws {
-        try runPrivileged("launchctl bootout system/\(label) 2>/dev/null || true; rm -f '\(installPath)'")
+        let steps = legacyRemovalSteps() + [
+            "(launchctl bootout system/\(label) 2>/dev/null || true)",
+            "rm -f \(Shell.quote(installPath))",
+        ]
+        try runPrivileged(steps.joined(separator: " && "))
     }
 
+    static func removeLegacyDaemons() throws {
+        let steps = legacyRemovalSteps()
+        guard !steps.isEmpty else { return }
+        try runPrivileged(steps.joined(separator: " && "))
+    }
+
+    private static func legacyRemovalSteps() -> [String] {
+        installedLegacyLabels.flatMap { legacy in
+            [
+                "(launchctl bootout system/\(legacy) 2>/dev/null || true)",
+                "rm -f \(Shell.quote(plistPath(for: legacy)))",
+            ]
+        }
+    }
+
+
     private static func runPrivileged(_ command: String) throws {
-        let escaped = command
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-        guard let script = NSAppleScript(source: "do shell script \"\(escaped)\" with administrator privileges") else {
+        let source = "do shell script \(Shell.appleScriptLiteral(command)) with administrator privileges"
+        guard let script = NSAppleScript(source: source) else {
             throw LaunchDaemonError.failed("Could not build install script")
         }
         var errorInfo: NSDictionary?
