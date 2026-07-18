@@ -20,12 +20,35 @@ or delete it.
   native `hidutil`. The remap lives in the kernel's HID layer, so nothing needs to keep running;
   optionally install a startup daemon so mappings apply at every boot, even at the login screen.
 
+- **Dock Folders** — clicking a checked folder in the Dock opens a browsable list instead of the
+  macOS stack, so items inside can be right-clicked. Runs from a small background helper.
+
 ## Build & run
 
 ```bash
-make dev            # build & run for development
+make dev            # build & run for development (no .app bundle — Folders needs `make r`)
 make build          # release build -> build/macOS Utility.app
+make r              # rebuild, restart the app and the helper
+make test           # run the test suite
+make tcc            # reset Accessibility grants for the app and helper
 ```
 
 Grant **Full Disk Access** (System Settings → Privacy & Security) to scan and clean protected system
 locations. Without it, those locations are skipped.
+
+Dock Folders additionally needs **Accessibility** access — granted to the *helper*
+(`macOS Utility Helper`), not the app.
+
+### Signing
+
+`make build` signs with the local `macOS Utility Dev` certificate so that Accessibility and Full
+Disk Access grants survive a rebuild. Ad-hoc signing (`codesign -s -`) pins the grant to the
+binary's hash, so every rebuild silently invalidates it.
+
+To build on a machine without that certificate, either override the identity or create one via
+Keychain Access → Certificate Assistant → Create a Certificate (Self-Signed, Code Signing):
+
+```bash
+make build SIGN_ID=-                      # ad-hoc; re-grant permissions after every build
+make build SIGN_ID="Developer ID Application: …"
+```
