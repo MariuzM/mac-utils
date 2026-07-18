@@ -7,7 +7,9 @@ BUILD_NUMBER = 4
 APP_ID = dev.marius.macosutility
 HELPER_ID = dev.marius.macosutility.folderhelper
 
-SIGN_ID ?= macOS Utility Dev
+PREFERRED_SIGN_ID = macOS Utility Dev
+SIGN_ID ?= $(shell security find-identity -v -p codesigning 2>/dev/null \
+	| grep -qF '$(PREFERRED_SIGN_ID)' && echo '$(PREFERRED_SIGN_ID)' || echo '-')
 
 .PHONY: dev build r test clean status reset helper-stop helper-start tcc
 
@@ -33,6 +35,14 @@ build:
 	codesign --force --sign "$(SIGN_ID)" "$(HELPER)"
 	codesign --force --sign "$(SIGN_ID)" "$(APP)"
 	@echo "Built $(APP) $(VERSION) ($(BUILD_NUMBER)) signed as $(SIGN_ID)"
+	@if [ "$(SIGN_ID)" = "-" ]; then \
+		echo ""; \
+		echo "  Note: signed ad-hoc. Accessibility and Full Disk Access grants are pinned"; \
+		echo "  to the binary hash, so they must be re-granted after every rebuild."; \
+		echo "  To keep grants across rebuilds, create a self-signed code-signing"; \
+		echo "  certificate named '$(PREFERRED_SIGN_ID)' — see README, Signing."; \
+		echo ""; \
+	fi
 
 r:
 	@$(MAKE) build

@@ -41,14 +41,24 @@ Dock Folders additionally needs **Accessibility** access — granted to the *hel
 
 ### Signing
 
-`make build` signs with the local `macOS Utility Dev` certificate so that Accessibility and Full
-Disk Access grants survive a rebuild. Ad-hoc signing (`codesign -s -`) pins the grant to the
-binary's hash, so every rebuild silently invalidates it.
+`make build` works anywhere with no setup: if a code-signing certificate named
+`macOS Utility Dev` is in your keychain it signs with that, otherwise it falls back to ad-hoc
+signing and says so.
 
-To build on a machine without that certificate, either override the identity or create one via
-Keychain Access → Certificate Assistant → Create a Certificate (Self-Signed, Code Signing):
+The distinction only matters for permissions. macOS ties an Accessibility or Full Disk Access
+grant to the binary's *designated requirement*. Ad-hoc signing makes that requirement the
+binary's own hash, so every rebuild produces a new hash and silently invalidates the grant — the
+System Settings toggle stays on while matching nothing. Signing with a certificate makes the
+requirement the bundle ID plus the certificate, which is stable across rebuilds.
+
+So ad-hoc is fine for a one-off build, and worth avoiding if you are iterating on the Dock
+Folders feature, which needs Accessibility.
+
+To create the certificate: Keychain Access → Certificate Assistant → Create a Certificate →
+name it `macOS Utility Dev`, identity type Self Signed Root, certificate type Code Signing.
 
 ```bash
-make build SIGN_ID=-                      # ad-hoc; re-grant permissions after every build
+make build                                 # auto: certificate if present, else ad-hoc
+make build SIGN_ID=-                       # force ad-hoc
 make build SIGN_ID="Developer ID Application: …"
 ```
