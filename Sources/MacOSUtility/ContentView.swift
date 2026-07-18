@@ -5,9 +5,12 @@ enum AppTab: Hashable {
     case cleaner
     case spotlight
     case rekey
+    case folders
 }
 
 struct ContentView: View {
+    @ObservedObject var folderStore: FolderStore
+    @ObservedObject var dockController: DockOverrideController
     @StateObject private var scanVM = ScanViewModel()
     @StateObject private var spotlightVM = SpotlightViewModel()
     @StateObject private var rekeyStore = MappingStore()
@@ -24,6 +27,8 @@ struct ContentView: View {
                         .tag(AppTab.spotlight)
                     Label("Rekey", systemImage: "keyboard")
                         .tag(AppTab.rekey)
+                    Label("Folders", systemImage: "folder")
+                        .tag(AppTab.folders)
                 }
                 .listStyle(.sidebar)
                 .frame(width: 200)
@@ -39,6 +44,8 @@ struct ContentView: View {
                     SpotlightView(vm: spotlightVM)
                 case .rekey:
                     RekeyView(store: rekeyStore)
+                case .folders:
+                    FoldersView(store: folderStore, dock: dockController)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
