@@ -1,13 +1,14 @@
+import FolderKit
 import AppKit
 
-public enum ExternalApp: String, CaseIterable, Identifiable {
+enum ExternalApp: String, CaseIterable, Identifiable {
     case terminal = "com.apple.Terminal"
     case ghostty = "com.mitchellh.ghostty"
     case vscode = "com.microsoft.VSCode"
 
-    public var id: String { rawValue }
+    var id: String { rawValue }
 
-    public var title: String {
+    var title: String {
         switch self {
         case .terminal: return "Terminal"
         case .ghostty: return "Ghostty"
@@ -15,20 +16,20 @@ public enum ExternalApp: String, CaseIterable, Identifiable {
         }
     }
 
-    public var wantsDirectory: Bool {
+    var wantsDirectory: Bool {
         switch self {
         case .terminal, .ghostty: return true
         case .vscode: return false
         }
     }
 
-    public var applicationURL: URL? {
+    var applicationURL: URL? {
         NSWorkspace.shared.urlForApplication(withBundleIdentifier: rawValue)
     }
 
-    public var isInstalled: Bool { applicationURL != nil }
+    var isInstalled: Bool { applicationURL != nil }
 
-    public func open(_ entry: FolderEntry) {
+    func open(_ entry: FolderEntry) {
         guard let app = applicationURL else { return }
         let target = wantsDirectory && !entry.isDirectory
             ? entry.url.deletingLastPathComponent()

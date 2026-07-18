@@ -17,9 +17,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
-        tap.shouldIntercept = { [weak self] url in
-            self?.store.isDockOverridden(url) ?? false
-        }
         tap.onIntercept = { [weak self] item in
             guard let self else { return }
             self.closePopover()
@@ -36,6 +33,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        if let observer {
+            DistributedNotificationCenter.default().removeObserver(observer)
+        }
+        observer = nil
+        stopTrustPolling()
         tap.stop()
         panels.close()
     }
@@ -43,6 +45,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func sync() {
         let wantsDockOverride = !store.dockOverrides.isEmpty
         publishTrustState()
+        tap.setOverriddenPaths(store.dockOverrides)
+
+        if !wantsDockOverride {
+            hasPrompted = false
+        }
 
         if wantsDockOverride && !DockAX.isTrusted {
             if !hasPrompted {
@@ -53,6 +60,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if !wantsDockOverride || !DockAX.isTrusted {
+            if !wantsDockOverride {
+                stopTrustPolling()
+            }
             tap.stop()
             panels.close()
         } else {
@@ -72,7 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let trusted = DockAX.isTrusted
         guard SharedConfig.defaults.object(forKey: SharedConfig.helperTrustedKey) as? Bool != trusted else { return }
         SharedConfig.defaults.set(trusted, forKey: SharedConfig.helperTrustedKey)
-        SharedConfig.defaults.synchronize()
+        SharedConfig.postConfigChanged()
     }
 
     private func startTrustPolling() {

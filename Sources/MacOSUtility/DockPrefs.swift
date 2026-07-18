@@ -1,19 +1,20 @@
+import FolderKit
 import Foundation
 
-public struct DockFolder: Identifiable, Hashable {
-    public let label: String
-    public let url: URL
+struct DockFolder: Identifiable, Hashable {
+    let label: String
+    let url: URL
 
-    public var id: String { url.path }
+    var id: String { url.path }
 
-    public init(label: String, url: URL) {
+    init(label: String, url: URL) {
         self.label = label
         self.url = url
     }
 }
 
-public enum DockPrefs {
-    public static func folders() -> [DockFolder] {
+enum DockPrefs {
+    static func folders() -> [DockFolder] {
         guard let plist = read() else { return [] }
         guard let others = plist["persistent-others"] as? [[String: Any]] else { return [] }
 
@@ -39,15 +40,7 @@ public enum DockPrefs {
             return plist
         }
 
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/defaults")
-        task.arguments = ["export", "com.apple.dock", "-"]
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = FileHandle.nullDevice
-        guard (try? task.run()) != nil else { return nil }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        task.waitUntilExit()
+        guard let data = Shell.runData(SystemPaths.defaults, ["export", "com.apple.dock", "-"]) else { return nil }
         return try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
     }
 }

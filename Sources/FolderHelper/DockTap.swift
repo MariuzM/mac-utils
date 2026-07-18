@@ -1,19 +1,33 @@
 import AppKit
 import CoreGraphics
 
-public final class DockTap {
-    public var shouldIntercept: ((URL) -> Bool)?
-    public var onIntercept: ((DockFolderItem) -> Void)?
+final class DockTap {
+    private let lock = NSLock()
+    private var overriddenPaths: Set<String> = []
+
+    var onIntercept: ((DockFolderItem) -> Void)?
 
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
     private var swallowNextMouseUp = false
 
-    public init() {}
+    init() {}
 
-    public var isRunning: Bool { tap != nil }
+    deinit { stop() }
 
-    public func start() {
+    func setOverriddenPaths(_ paths: Set<String>) {
+        lock.lock()
+        overriddenPaths = paths
+        lock.unlock()
+    }
+
+    private func isOverridden(_ url: URL) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return overriddenPaths.contains(url.standardizedFileURL.path)
+    }
+
+    func start() {
         guard tap == nil, DockAX.isTrusted else { return }
 
         let mask = (1 << CGEventType.leftMouseDown.rawValue) | (1 << CGEventType.leftMouseUp.rawValue)
@@ -40,7 +54,7 @@ public final class DockTap {
         self.source = source
     }
 
-    public func stop() {
+    func stop() {
         if let tap {
             CGEvent.tapEnable(tap: tap, enable: false)
             CFMachPortInvalidate(tap)
@@ -68,10 +82,7 @@ public final class DockTap {
         guard type == .leftMouseDown else { return Unmanaged.passUnretained(event) }
 
         let location = event.location
-        let item = DockAX.folderItem(at: location)
-        let intercept = item.map { shouldIntercept?($0.url) == true } ?? false
-
-        guard let item, intercept
+        guard let item = DockAX.folderItem(at: location), isOverridden(item.url)
         else { return Unmanaged.passUnretained(event) }
 
         swallowNextMouseUp = true

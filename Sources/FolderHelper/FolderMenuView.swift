@@ -1,15 +1,17 @@
+import FolderKit
 import SwiftUI
 import AppKit
 
-public struct FolderMenuView: View {
+struct FolderMenuView: View {
     @ObservedObject var store: FolderStore
     let root: URL?
     let onClose: (() -> Void)?
 
     @State private var stack: [URL]
     @State private var entries: [FolderEntry] = []
+    @State private var unreadableReason: String?
 
-    public init(store: FolderStore, root: URL? = nil, onClose: (() -> Void)? = nil) {
+    init(store: FolderStore, root: URL? = nil, onClose: (() -> Void)? = nil) {
         self.store = store
         self.root = root
         self.onClose = onClose
@@ -20,7 +22,7 @@ public struct FolderMenuView: View {
         stack.count > (root == nil ? 0 : 1)
     }
 
-    public var body: some View {
+    var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider()
@@ -80,7 +82,17 @@ public struct FolderMenuView: View {
 
     private var directoryRows: some View {
         Group {
-            if entries.isEmpty {
+            if let unreadableReason {
+                VStack(alignment: .leading, spacing: 2) {
+                    Label("Can't read this folder", systemImage: "lock")
+                        .foregroundStyle(.orange)
+                    Text(unreadableReason)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+            } else if entries.isEmpty {
                 Text("Empty folder")
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 6)
@@ -153,21 +165,23 @@ public struct FolderMenuView: View {
     }
 
     private func addFolder() {
-        NSApp.activate(ignoringOtherApps: true)
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = true
-        guard panel.runModal() == .OK else { return }
-        panel.urls.forEach { store.pin($0) }
+        store.pinFromOpenPanel(activate: true)
     }
 
     private func reload() {
         guard let current = stack.last else {
             entries = []
+            unreadableReason = nil
             return
         }
-        entries = store.entries(of: current)
+        switch store.listing(of: current) {
+        case .entries(let found):
+            entries = found
+            unreadableReason = nil
+        case .unreadable(let reason):
+            entries = []
+            unreadableReason = reason
+        }
     }
 }
 
@@ -177,7 +191,7 @@ private struct FolderRow<Menu: View>: View {
     @ViewBuilder let menu: () -> Menu
     @State private var hovering = false
 
-    public var body: some View {
+    var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
                 Image(nsImage: NSWorkspace.shared.icon(forFile: entry.url.path))

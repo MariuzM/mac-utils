@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 public struct PinnedFolder: Codable, Identifiable, Hashable {
@@ -37,8 +38,11 @@ public final class FolderStore: ObservableObject {
         didSet { saveDockOverrides() }
     }
 
+    @Published public private(set) var loadError: String?
+
     private let dockOverridesKey = "dockOverriddenFolders"
     private var suppressPersist = false
+    private var unreadableOnDisk = false
 
     private let fileURL: URL = {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -81,24 +85,55 @@ public final class FolderStore: ObservableObject {
     }
 
     public func pin(_ url: URL) {
-        let folder = PinnedFolder(path: url.path)
+        let folder = PinnedFolder(path: url.standardizedFileURL.path)
         guard !folders.contains(folder) else { return }
         folders.append(folder)
+    }
+
+    @discardableResult
+    public func pinFromOpenPanel(activate: Bool = false) -> Int {
+        if activate {
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = true
+        guard panel.runModal() == .OK else { return 0 }
+        panel.urls.forEach { pin($0) }
+        return panel.urls.count
     }
 
     public func unpin(_ folder: PinnedFolder) {
         folders.removeAll { $0.id == folder.id }
     }
 
-    public func entries(of url: URL) -> [FolderEntry] {
-        let keys: [URLResourceKey] = [.isDirectoryKey]
-        guard let contents = try? FileManager.default.contentsOfDirectory(
-            at: url,
-            includingPropertiesForKeys: keys,
-            options: [.skipsHiddenFiles]
-        ) else { return [] }
+    public enum FolderListing {
+        case entries([FolderEntry])
+        case unreadable(String)
+    }
 
-        return contents
+    public func listing(of url: URL) -> FolderListing {
+        let keys: [URLResourceKey] = [.isDirectoryKey]
+        do {
+            let contents = try FileManager.default.contentsOfDirectory(
+                at: url,
+                includingPropertiesForKeys: keys,
+                options: [.skipsHiddenFiles]
+            )
+            return .entries(sorted(contents))
+        } catch {
+            return .unreadable(error.localizedDescription)
+        }
+    }
+
+    public func entries(of url: URL) -> [FolderEntry] {
+        if case .entries(let e) = listing(of: url) { return e }
+        return []
+    }
+
+    private func sorted(_ contents: [URL]) -> [FolderEntry] {
+        contents
             .map { child in
                 let isDirectory = (try? child.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
                 return FolderEntry(url: child, isDirectory: isDirectory)
@@ -109,19 +144,43 @@ public final class FolderStore: ObservableObject {
             }
     }
 
+    private func withPersistSuppressed(_ body: () -> Void) {
+        let previous = suppressPersist
+        suppressPersist = true
+        body()
+        suppressPersist = previous
+    }
+
     private func load() {
-        guard let data = try? Data(contentsOf: fileURL),
-              let decoded = try? JSONDecoder().decode([PinnedFolder].self, from: data)
-        else {
-            folders = Self.defaultFolders
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            withPersistSuppressed { folders = Self.defaultFolders }
+            loadError = nil
+            unreadableOnDisk = false
             return
         }
-        folders = decoded
+        guard let data = try? Data(contentsOf: fileURL),
+            let decoded = try? JSONDecoder().decode([PinnedFolder].self, from: data)
+        else {
+            withPersistSuppressed { folders = [] }
+            unreadableOnDisk = true
+            loadError = "Pinned folders could not be read. The existing file is left untouched — "
+                + "fix or remove it rather than re-pinning, or your folders will be overwritten."
+            return
+        }
+        withPersistSuppressed { folders = decoded }
+        loadError = nil
+        unreadableOnDisk = false
     }
 
     private func save() {
+        guard !unreadableOnDisk else { return }
         guard !suppressPersist, let data = try? JSONEncoder().encode(folders) else { return }
-        try? data.write(to: fileURL)
+        do {
+            try data.write(to: fileURL)
+        } catch {
+            loadError = "Pinned folders could not be saved: \(error.localizedDescription)"
+            return
+        }
         SharedConfig.postConfigChanged()
     }
 

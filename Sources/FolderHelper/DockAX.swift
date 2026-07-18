@@ -1,28 +1,24 @@
 import AppKit
 import ApplicationServices
 
-public struct DockFolderItem: Identifiable, Hashable {
-    public let title: String
-    public let url: URL
-    public let frame: CGRect
+struct DockFolderItem: Identifiable, Hashable {
+    let title: String
+    let url: URL
+    let frame: CGRect
 
-    public var id: String { url.path }
+    var id: String { url.path }
 }
 
-public enum DockAX {
-    public static var isTrusted: Bool { AXIsProcessTrusted() }
+enum DockAX {
+    static var isTrusted: Bool { AXIsProcessTrusted() }
 
-    public static func requestTrust() {
+    static func requestTrust() {
         let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
         _ = AXIsProcessTrustedWithOptions([key: true] as CFDictionary)
     }
 
-    public static func openAccessibilitySettings() {
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") else { return }
-        NSWorkspace.shared.open(url)
-    }
 
-    public static func folderItems() -> [DockFolderItem] {
+    static func folderItems() -> [DockFolderItem] {
         guard isTrusted,
               let pid = NSRunningApplication
                   .runningApplications(withBundleIdentifier: "com.apple.dock")
@@ -49,7 +45,7 @@ public enum DockAX {
         return items
     }
 
-    public static func folderItem(at point: CGPoint) -> DockFolderItem? {
+    static func folderItem(at point: CGPoint) -> DockFolderItem? {
         folderItems().first { $0.frame.contains(point) }
     }
 
@@ -64,11 +60,16 @@ public enum DockAX {
               let rawSize = attribute(element, kAXSizeAttribute)
         else { return nil }
 
+        guard CFGetTypeID(rawPosition as CFTypeRef) == AXValueGetTypeID(),
+              CFGetTypeID(rawSize as CFTypeRef) == AXValueGetTypeID()
+        else { return nil }
+
         var origin = CGPoint.zero
         var size = CGSize.zero
-        AXValueGetValue(rawPosition as! AXValue, .cgPoint, &origin)
-        AXValueGetValue(rawSize as! AXValue, .cgSize, &size)
-        guard size.width > 0, size.height > 0 else { return nil }
+        guard AXValueGetValue(rawPosition as! AXValue, .cgPoint, &origin),
+              AXValueGetValue(rawSize as! AXValue, .cgSize, &size),
+              size.width > 0, size.height > 0
+        else { return nil }
         return CGRect(origin: origin, size: size)
     }
 }

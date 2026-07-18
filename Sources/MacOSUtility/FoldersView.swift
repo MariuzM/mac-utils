@@ -11,6 +11,11 @@ struct FoldersView: View {
     @State private var launchAtLogin = false
     @State private var helperTrusted = false
     @State private var status: String?
+    @State private var configObserver: NSObjectProtocol?
+
+    private var awaitingAccessibilityGrant: Bool {
+        !store.dockOverrides.isEmpty && (!helperRunning || !helperTrusted)
+    }
 
     var body: some View {
         ScrollView {
@@ -34,8 +39,22 @@ struct FoldersView: View {
         .onAppear {
             HelperControl.migrateLegacyLoginItems()
             refresh()
+            if configObserver == nil {
+                configObserver = SharedConfig.observeConfigChanged { refresh() }
+            }
         }
-        .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
+        .onDisappear {
+            if let configObserver {
+                DistributedNotificationCenter.default().removeObserver(configObserver)
+            }
+            configObserver = nil
+        }
+        .onReceive(NSWorkspace.shared.notificationCenter.publisher(
+            for: NSWorkspace.didLaunchApplicationNotification)) { _ in refresh() }
+        .onReceive(NSWorkspace.shared.notificationCenter.publisher(
+            for: NSWorkspace.didTerminateApplicationNotification)) { _ in refresh() }
+        .onReceive(Timer.publish(every: 3, on: .main, in: .common).autoconnect()) { _ in
+            guard awaitingAccessibilityGrant else { return }
             refresh()
         }
     }
@@ -164,7 +183,7 @@ struct FoldersView: View {
                         SharedConfig.postConfigChanged()
                         status = "Helper asked for Accessibility access — approve the prompt, or add it in System Settings."
                     }
-                    Button("Open Settings") { DockAX.openAccessibilitySettings() }
+                    Button("Open Settings") { AccessibilitySettings.open() }
                     Button("Reveal Helper") {
                         if let helperURL = HelperControl.helperURL {
                             NSWorkspace.shared.activateFileViewerSelecting([helperURL])
@@ -200,6 +219,12 @@ struct FoldersView: View {
         Text("Pinned Folders")
             .font(.headline)
 
+        if let loadError = store.loadError {
+            Label(loadError, systemImage: "exclamationmark.triangle")
+                .font(.caption)
+                .foregroundStyle(.orange)
+        }
+
         if store.folders.isEmpty {
             Text("No folders pinned yet")
                 .foregroundStyle(.secondary)
@@ -219,18 +244,13 @@ struct FoldersView: View {
     }
 
     private func addFolder() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = true
-        guard panel.runModal() == .OK else { return }
-        panel.urls.forEach { store.pin($0) }
+        store.pinFromOpenPanel()
     }
 
     private func refresh() {
         dockFolders = DockPrefs.folders()
         helperRunning = HelperControl.isRunning
-        helperTrusted = HelperControl.isTrusted
+        helperTrusted = HelperControl.helperReportedTrusted
         launchAtLogin = HelperControl.launchesAtLogin
     }
 

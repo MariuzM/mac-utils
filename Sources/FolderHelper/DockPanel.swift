@@ -1,26 +1,39 @@
+import FolderKit
 import AppKit
 import SwiftUI
 
-public final class DockPanel: NSPanel {
-    public override var canBecomeKey: Bool { true }
+final class DockPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
 }
 
 @MainActor
-public final class DockPanelController {
+final class DockPanelController {
+    private static let reopenSuppressionWindow: TimeInterval = 0.35
+
     private var panel: DockPanel?
     private var outsideMonitor: Any?
+    private var lastClosedID: String?
+    private var lastClosedAt: Date?
 
-    public init() {}
+    init() {}
 
-    public func toggle(for item: DockFolderItem, store: FolderStore) {
+    func toggle(for item: DockFolderItem, store: FolderStore) {
         if let panel, panel.isVisible, panel.identifier?.rawValue == item.id {
             close()
             return
         }
+
+        if lastClosedID == item.id, let lastClosedAt,
+           Date().timeIntervalSince(lastClosedAt) < Self.reopenSuppressionWindow {
+            self.lastClosedID = nil
+            self.lastClosedAt = nil
+            return
+        }
+
         show(for: item, store: store)
     }
 
-    public func show(for item: DockFolderItem, store: FolderStore) {
+    func show(for item: DockFolderItem, store: FolderStore) {
         close()
 
         let content = FolderMenuView(store: store, root: item.url) { [weak self] in
@@ -56,11 +69,15 @@ public final class DockPanelController {
         self.panel = panel
     }
 
-    public func close() {
+    func close() {
         if let outsideMonitor {
             NSEvent.removeMonitor(outsideMonitor)
         }
         outsideMonitor = nil
+        if let panel {
+            lastClosedID = panel.identifier?.rawValue
+            lastClosedAt = Date()
+        }
         panel?.orderOut(nil)
         panel = nil
     }

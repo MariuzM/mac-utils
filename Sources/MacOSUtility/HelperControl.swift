@@ -1,61 +1,83 @@
+import FolderKit
 import AppKit
 
-public enum HelperControl {
-    public static var helperURL: URL? {
+enum HelperError: LocalizedError {
+    case notEmbedded
+    case launchctlFailed(Int32)
+
+    var errorDescription: String? {
+        switch self {
+        case .notEmbedded:
+            return "The helper is not embedded in this build — run `make build`."
+        case .launchctlFailed(let status):
+            return "launchctl could not register the helper (exit \(status))."
+        }
+    }
+}
+
+enum HelperControl {
+    static var helperURL: URL? {
         let embedded = Bundle.main.bundleURL
             .appendingPathComponent("Contents/Library/LoginItems/FolderHelper.app")
         return FileManager.default.fileExists(atPath: embedded.path) ? embedded : nil
     }
 
-    public static var isTrusted: Bool {
+    static var helperReportedTrusted: Bool {
         SharedConfig.defaults.bool(forKey: SharedConfig.helperTrustedKey)
     }
 
-    public static var isRunning: Bool {
+    static var isRunning: Bool {
         !NSRunningApplication.runningApplications(withBundleIdentifier: SharedConfig.helperBundleID).isEmpty
     }
 
-    public static var agentURL: URL {
+    static var agentURL: URL {
         FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/LaunchAgents/\(SharedConfig.helperLabel).plist")
     }
 
-    public static var launchesAtLogin: Bool {
+    static var launchesAtLogin: Bool {
         FileManager.default.fileExists(atPath: agentURL.path)
     }
 
-    private static let legacyLabels = ["mariuzm.macosutility.folderhelper"]
+    private static let legacyLabels = ["mariuzm.macosutility.folderhelper", "dev.marius.rekey.folderhelper"]
 
-    public static func migrateLegacyLoginItems() {
+    static func migrateLegacyLoginItems() {
         for label in legacyLabels {
             let plist = FileManager.default.homeDirectoryForCurrentUser
                 .appendingPathComponent("Library/LaunchAgents/\(label).plist")
-            guard FileManager.default.fileExists(atPath: plist.path) else { continue }
-            launchctl(["bootout", "gui/\(getuid())/\(label)"])
-            try? FileManager.default.removeItem(at: plist)
+            if FileManager.default.fileExists(atPath: plist.path) {
+                launchctl(["bootout", "gui/\(getuid())/\(label)"])
+                try? FileManager.default.removeItem(at: plist)
+            }
+            NSRunningApplication
+                .runningApplications(withBundleIdentifier: label)
+                .forEach { $0.terminate() }
         }
-
-        NSRunningApplication
-            .runningApplications(withBundleIdentifier: "mariuzm.macosutility.folderhelper")
-            .forEach { $0.terminate() }
     }
 
-    @discardableResult
-    public static func start() -> Bool {
-        guard let helperURL, !isRunning else { return isRunning }
+    static func start(completion: (@Sendable (Result<Void, Error>) -> Void)? = nil) {
+        guard let helperURL else {
+            completion?(.failure(HelperError.notEmbedded))
+            return
+        }
+        guard !isRunning else {
+            completion?(.success(()))
+            return
+        }
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = false
-        NSWorkspace.shared.openApplication(at: helperURL, configuration: configuration)
-        return true
+        NSWorkspace.shared.openApplication(at: helperURL, configuration: configuration) { _, error in
+            completion?(error.map { .failure($0) } ?? .success(()))
+        }
     }
 
-    public static func stop() {
+    static func stop() {
         NSRunningApplication
             .runningApplications(withBundleIdentifier: SharedConfig.helperBundleID)
             .forEach { $0.terminate() }
     }
 
-    public static func setLaunchAtLogin(_ enabled: Bool) throws {
+    static func setLaunchAtLogin(_ enabled: Bool) throws {
         if enabled {
             try installAgent()
         } else {
@@ -64,7 +86,7 @@ public enum HelperControl {
     }
 
     private static func installAgent() throws {
-        guard let helperURL else { return }
+        guard let helperURL else { throw HelperError.notEmbedded }
         let executable = helperURL.appendingPathComponent("Contents/MacOS/FolderHelper").path
 
         let plist: [String: Any] = [
@@ -81,23 +103,22 @@ public enum HelperControl {
         try data.write(to: agentURL)
 
         launchctl(["bootout", "gui/\(getuid())/\(SharedConfig.helperLabel)"])
-        launchctl(["bootstrap", "gui/\(getuid())", agentURL.path])
+        let status = launchctl(["bootstrap", "gui/\(getuid())", agentURL.path])
+        guard status == 0 else {
+            try? FileManager.default.removeItem(at: agentURL)
+            throw HelperError.launchctlFailed(status)
+        }
     }
 
     private static func removeAgent() throws {
         launchctl(["bootout", "gui/\(getuid())/\(SharedConfig.helperLabel)"])
-        try? FileManager.default.removeItem(at: agentURL)
+        if FileManager.default.fileExists(atPath: agentURL.path) {
+            try FileManager.default.removeItem(at: agentURL)
+        }
     }
 
     @discardableResult
     private static func launchctl(_ arguments: [String]) -> Int32 {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-        task.arguments = arguments
-        task.standardError = FileHandle.nullDevice
-        task.standardOutput = FileHandle.nullDevice
-        guard (try? task.run()) != nil else { return -1 }
-        task.waitUntilExit()
-        return task.terminationStatus
+        Shell.run(SystemPaths.launchctl, arguments).status
     }
 }
