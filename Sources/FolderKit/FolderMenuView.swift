@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 
-struct FolderMenuView: View {
+public struct FolderMenuView: View {
     @ObservedObject var store: FolderStore
     let root: URL?
     let onClose: (() -> Void)?
@@ -9,7 +9,7 @@ struct FolderMenuView: View {
     @State private var stack: [URL]
     @State private var entries: [FolderEntry] = []
 
-    init(store: FolderStore, root: URL? = nil, onClose: (() -> Void)? = nil) {
+    public init(store: FolderStore, root: URL? = nil, onClose: (() -> Void)? = nil) {
         self.store = store
         self.root = root
         self.onClose = onClose
@@ -20,7 +20,7 @@ struct FolderMenuView: View {
         stack.count > (root == nil ? 0 : 1)
     }
 
-    var body: some View {
+    public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider()
@@ -34,7 +34,7 @@ struct FolderMenuView: View {
                 }
                 .padding(6)
             }
-            .frame(maxHeight: 360)
+            .frame(maxHeight: 560)
             Divider()
             footer
         }
@@ -138,6 +138,13 @@ struct FolderMenuView: View {
                 }
                 .buttonStyle(.plain)
                 Spacer()
+                Button("Copy Path") {
+                    guard let current = stack.last else { return }
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(current.path, forType: .string)
+                    onClose?()
+                }
+                .buttonStyle(.plain)
             }
         }
         .font(.callout)
@@ -170,7 +177,7 @@ private struct FolderRow<Menu: View>: View {
     @ViewBuilder let menu: () -> Menu
     @State private var hovering = false
 
-    var body: some View {
+    public var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
                 Image(nsImage: NSWorkspace.shared.icon(forFile: entry.url.path))

@@ -1,17 +1,19 @@
 import AppKit
 import CoreGraphics
 
-final class DockTap {
-    var shouldIntercept: ((URL) -> Bool)?
-    var onIntercept: ((DockFolderItem) -> Void)?
+public final class DockTap {
+    public var shouldIntercept: ((URL) -> Bool)?
+    public var onIntercept: ((DockFolderItem) -> Void)?
 
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
     private var swallowNextMouseUp = false
 
-    var isRunning: Bool { tap != nil }
+    public init() {}
 
-    func start() {
+    public var isRunning: Bool { tap != nil }
+
+    public func start() {
         guard tap == nil, DockAX.isTrusted else { return }
 
         let mask = (1 << CGEventType.leftMouseDown.rawValue) | (1 << CGEventType.leftMouseUp.rawValue)
@@ -38,7 +40,7 @@ final class DockTap {
         self.source = source
     }
 
-    func stop() {
+    public func stop() {
         if let tap {
             CGEvent.tapEnable(tap: tap, enable: false)
             CFMachPortInvalidate(tap)
@@ -63,9 +65,13 @@ final class DockTap {
             return nil
         }
 
-        guard type == .leftMouseDown,
-              let item = DockAX.folderItem(at: event.location),
-              shouldIntercept?(item.url) == true
+        guard type == .leftMouseDown else { return Unmanaged.passUnretained(event) }
+
+        let location = event.location
+        let item = DockAX.folderItem(at: location)
+        let intercept = item.map { shouldIntercept?($0.url) == true } ?? false
+
+        guard let item, intercept
         else { return Unmanaged.passUnretained(event) }
 
         swallowNextMouseUp = true

@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import FolderKit
 
 enum AppTab: Hashable {
     case cleaner
@@ -10,7 +11,6 @@ enum AppTab: Hashable {
 
 struct ContentView: View {
     @ObservedObject var folderStore: FolderStore
-    @ObservedObject var dockController: DockOverrideController
     @StateObject private var scanVM = ScanViewModel()
     @StateObject private var spotlightVM = SpotlightViewModel()
     @StateObject private var rekeyStore = MappingStore()
@@ -45,7 +45,7 @@ struct ContentView: View {
                 case .rekey:
                     RekeyView(store: rekeyStore)
                 case .folders:
-                    FoldersView(store: folderStore, dock: dockController)
+                    FoldersView(store: folderStore)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -1,28 +1,28 @@
 import AppKit
 import ApplicationServices
 
-struct DockFolderItem: Identifiable, Hashable {
-    let title: String
-    let url: URL
-    let frame: CGRect
+public struct DockFolderItem: Identifiable, Hashable {
+    public let title: String
+    public let url: URL
+    public let frame: CGRect
 
-    var id: String { url.path }
+    public var id: String { url.path }
 }
 
-enum DockAX {
-    static var isTrusted: Bool { AXIsProcessTrusted() }
+public enum DockAX {
+    public static var isTrusted: Bool { AXIsProcessTrusted() }
 
-    static func requestTrust() {
+    public static func requestTrust() {
         let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
         _ = AXIsProcessTrustedWithOptions([key: true] as CFDictionary)
     }
 
-    static func openAccessibilitySettings() {
+    public static func openAccessibilitySettings() {
         guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") else { return }
         NSWorkspace.shared.open(url)
     }
 
-    static func folderItems() -> [DockFolderItem] {
+    public static func folderItems() -> [DockFolderItem] {
         guard isTrusted,
               let pid = NSRunningApplication
                   .runningApplications(withBundleIdentifier: "com.apple.dock")
@@ -49,7 +49,7 @@ enum DockAX {
         return items
     }
 
-    static func folderItem(at point: CGPoint) -> DockFolderItem? {
+    public static func folderItem(at point: CGPoint) -> DockFolderItem? {
         folderItems().first { $0.frame.contains(point) }
     }
 

@@ -7,9 +7,19 @@ let package = Package(
         .macOS(.v13)
     ],
     targets: [
+        .target(
+            name: "FolderKit",
+            path: "Sources/FolderKit"
+        ),
         .executableTarget(
             name: "MacOSUtility",
+            dependencies: ["FolderKit"],
             path: "Sources/MacOSUtility"
-        )
+        ),
+        .executableTarget(
+            name: "FolderHelper",
+            dependencies: ["FolderKit"],
+            path: "Sources/FolderHelper"
+        ),
     ]
 )

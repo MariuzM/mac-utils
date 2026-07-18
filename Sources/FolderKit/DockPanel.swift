@@ -1,16 +1,18 @@
 import AppKit
 import SwiftUI
 
-final class DockPanel: NSPanel {
-    override var canBecomeKey: Bool { true }
+public final class DockPanel: NSPanel {
+    public override var canBecomeKey: Bool { true }
 }
 
 @MainActor
-final class DockPanelController {
+public final class DockPanelController {
     private var panel: DockPanel?
     private var outsideMonitor: Any?
 
-    func toggle(for item: DockFolderItem, store: FolderStore) {
+    public init() {}
+
+    public func toggle(for item: DockFolderItem, store: FolderStore) {
         if let panel, panel.isVisible, panel.identifier?.rawValue == item.id {
             close()
             return
@@ -18,7 +20,7 @@ final class DockPanelController {
         show(for: item, store: store)
     }
 
-    func show(for item: DockFolderItem, store: FolderStore) {
+    public func show(for item: DockFolderItem, store: FolderStore) {
         close()
 
         let content = FolderMenuView(store: store, root: item.url) { [weak self] in
@@ -54,7 +56,7 @@ final class DockPanelController {
         self.panel = panel
     }
 
-    func close() {
+    public func close() {
         if let outsideMonitor {
             NSEvent.removeMonitor(outsideMonitor)
         }
