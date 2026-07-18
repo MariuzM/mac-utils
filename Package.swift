@@ -21,5 +21,15 @@ let package = Package(
             dependencies: ["FolderKit"],
             path: "Sources/FolderHelper"
         ),
+        .testTarget(
+            name: "FolderKitTests",
+            dependencies: ["FolderKit"],
+            path: "Tests/FolderKitTests"
+        ),
+        .testTarget(
+            name: "MacOSUtilityTests",
+            dependencies: ["MacOSUtility"],
+            path: "Tests/MacOSUtilityTests"
+        ),
     ]
 )
