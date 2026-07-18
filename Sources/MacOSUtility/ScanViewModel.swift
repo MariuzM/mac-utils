@@ -1,6 +1,6 @@
+import AppKit
 import Foundation
 import SwiftUI
-import AppKit
 
 enum FullDiskAccess {
     static func granted() -> Bool {
@@ -63,10 +63,12 @@ final class ScanViewModel: ObservableObject {
     private var lastActivity = Date()
     private var lastWarn = Date()
 
+    private static let consoleLimit = 500
+
     func appendConsole(_ line: String) {
         consoleLines.append(line)
-        if consoleLines.count > 500 {
-            consoleLines.removeFirst(consoleLines.count - 500)
+        if consoleLines.count > Self.consoleLimit {
+            consoleLines.removeFirst(consoleLines.count - Self.consoleLimit)
         }
         lastActivity = Date()
     }
@@ -158,6 +160,7 @@ final class ScanViewModel: ObservableObject {
                     self.fraction = p.fraction
                 }
             }
+            guard !Task.isCancelled else { return }
             self.volumes = result
             self.selected = Set(result.flatMap { $0.categories.map(\.id) })
             self.isScanning = false
@@ -194,11 +197,14 @@ final class ScanViewModel: ObservableObject {
                     self.backupPhase = phase
                 }
             }
+            guard !Task.isCancelled else { return }
             self.lastBackup = summary
             self.isBackingUp = false
             self.backupPhase = ""
             self.showBackupResult = true
-            NSWorkspace.shared.activateFileViewerSelecting([summary.destination])
+            if summary.copied > 0 {
+                NSWorkspace.shared.activateFileViewerSelecting([summary.destination])
+            }
         }
     }
 
@@ -234,11 +240,14 @@ final class ScanViewModel: ObservableObject {
                     self.deletePhase = phase
                 }
             }
+            let wasCancelled = Task.isCancelled
             self.lastDelete = summary
             self.isDeleting = false
             self.deletePhase = ""
             self.showDeleteResult = true
-            self.startScan()
+            if !wasCancelled {
+                self.startScan()
+            }
         }
     }
 
@@ -285,7 +294,9 @@ final class ScanViewModel: ObservableObject {
                 }
             }
             self.stopWatchdog()
-            self.appendConsole("──────── Done: removed \(result.removed), failed \(result.failed.count), needs Full Disk Access \(result.needsFullDiskAccess.count) ────────")
+            self.appendConsole(
+                "──────── Done: removed \(result.removed), failed \(result.failed.count), needs Full Disk Access \(result.needsFullDiskAccess.count) ────────"
+            )
             self.lastAdmin = result
             self.isDeleting = false
             self.deleteIndeterminate = false

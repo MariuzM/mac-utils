@@ -1,5 +1,5 @@
-import Foundation
 import AppKit
+import Foundation
 
 struct SpotlightFolder: Identifiable, Hashable {
     let path: String
@@ -23,11 +23,7 @@ enum SpotlightError: LocalizedError {
 
 enum SpotlightManager {
     static func loadExclusions() throws -> [String] {
-        let script = """
-        #!/bin/sh
-        /usr/bin/mdutil -P / 2>&1 || true
-        """
-        let out = try runPrivileged(script)
+        let out = try runPrivileged("/usr/bin/mdutil -P / 2>&1 || true")
         if out.range(of: "must be root", options: .caseInsensitive) != nil {
             throw SpotlightError.failed("Reading the Spotlight configuration needs administrator rights.")
         }
@@ -48,11 +44,6 @@ enum SpotlightManager {
         }
     }
 
-    static func normalize(_ path: String) -> String {
-        var p = URL(fileURLWithPath: path).standardizedFileURL.path
-        while p.count > 1 && p.hasSuffix("/") { p.removeLast() }
-        return p
-    }
 
     private static func parseExclusions(_ output: String) -> [String] {
         var result: [String] = []
@@ -73,8 +64,9 @@ enum SpotlightManager {
 
     private static func quotedValue(_ line: String) -> String? {
         guard let first = line.firstIndex(of: "\""),
-              let last = line.lastIndex(of: "\""),
-              first < last else { return nil }
+            let last = line.lastIndex(of: "\""),
+            first < last
+        else { return nil }
         let v = String(line[line.index(after: first)..<last])
         return v.hasPrefix("/") ? v : nil
     }
@@ -87,44 +79,18 @@ enum SpotlightManager {
         return line.hasPrefix("/") ? line : nil
     }
 
-    private static func shq(_ s: String) -> String {
-        "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
-    }
+    private static func runPrivileged(_ command: String) throws -> String {
+        let script = "do shell script \(Shell.appleScriptLiteral(command)) with administrator privileges"
+        let result = Shell.run(SystemPaths.osascript, ["-e", script])
 
-    private static func runPrivileged(_ script: String) throws -> String {
-        let tmp = FileManager.default.temporaryDirectory
-            .appendingPathComponent("macosutility-\(UUID().uuidString).sh")
-        try script.write(to: tmp, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: tmp.path)
-        defer { try? FileManager.default.removeItem(at: tmp) }
-
-        let osa = Process()
-        osa.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        osa.arguments = ["-e", "do shell script \"/bin/sh \" & quoted form of \(appleQuote(tmp.path)) with administrator privileges"]
-
-        let outPipe = Pipe()
-        let errPipe = Pipe()
-        osa.standardOutput = outPipe
-        osa.standardError = errPipe
-        try osa.run()
-
-        let outData = outPipe.fileHandleForReading.readDataToEndOfFile()
-        let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
-        osa.waitUntilExit()
-
-        let out = String(data: outData, encoding: .utf8) ?? ""
-        let err = String(data: errData, encoding: .utf8) ?? ""
-
-        if osa.terminationStatus != 0 {
-            if err.contains("-128") || err.localizedCaseInsensitiveContains("cancel") {
+        guard result.succeeded else {
+            if Shell.indicatesCancellation(result.combined) {
                 throw SpotlightError.cancelled
             }
-            throw SpotlightError.failed(err.isEmpty ? "osascript exited \(osa.terminationStatus)" : err.trimmingCharacters(in: .whitespacesAndNewlines))
+            let message = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            throw SpotlightError.failed(message.isEmpty ? "osascript exited \(result.status)" : message)
         }
-        return out
+        return result.stdout
     }
 
-    private static func appleQuote(_ s: String) -> String {
-        "\"" + s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
-    }
 }

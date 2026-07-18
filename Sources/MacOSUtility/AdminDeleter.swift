@@ -6,14 +6,51 @@ struct AdminDeleteResult: Sendable {
     let cancelled: Bool
     let needsFullDiskAccess: [String]
     let failed: [String]
-
-    var ok: Bool { failed.isEmpty && needsFullDiskAccess.isEmpty && !cancelled }
+    let rejected: [String]
 }
 
 private let adminProtectedRoots: Set<String> = [
     "/", "/System", "/Users", "/Library", "/bin", "/sbin", "/usr", "/etc",
-    "/var", "/private", "/Applications", "/Volumes", "/cores", "/opt", "/tmp"
+    "/var", "/private", "/Applications", "/Volumes", "/cores", "/opt", "/tmp",
 ]
+
+private final class CompletionLatch: @unchecked Sendable {
+    private let lock = NSLock()
+    private var streamsClosed = 0
+    private var exited = false
+    private var resumed = false
+    private(set) var status: Int32 = 0
+
+    func signalStreamEOF() {
+        lock.lock()
+        streamsClosed += 1
+        lock.unlock()
+    }
+
+    func signalExit(status: Int32) {
+        lock.lock()
+        exited = true
+        self.status = status
+        lock.unlock()
+    }
+
+    func markDoneIfReady(status _: Int32) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard exited, streamsClosed >= 2, !resumed else { return false }
+        resumed = true
+        return true
+    }
+
+    func forceDone(status: Int32) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !resumed else { return false }
+        resumed = true
+        self.status = status
+        return true
+    }
+}
 
 private final class OutputBox: @unchecked Sendable {
     private let lock = NSLock()
@@ -23,6 +60,8 @@ private final class OutputBox: @unchecked Sendable {
 }
 
 final class AdminDeleter: @unchecked Sendable {
+    private static let drainGrace: TimeInterval = 0.25
+
     private let lock = NSLock()
     private var process: Process?
     private var cancelledFlag = false
@@ -48,33 +87,31 @@ final class AdminDeleter: @unchecked Sendable {
         lock.lock(); cancelledFlag = false; lock.unlock()
     }
 
-    func run(paths: [String],
-             log: @escaping @Sendable (String) -> Void,
-             phase: @escaping @Sendable (String) -> Void) async -> AdminDeleteResult {
+    func run(
+        paths: [String],
+        log: @escaping @Sendable (String) -> Void,
+        phase: @escaping @Sendable (String) -> Void
+    ) async -> AdminDeleteResult {
         resetCancelled()
 
         let fm = FileManager.default
         let myUID = getuid()
 
-        var simulator = false
-        var rootPaths: [String] = []
-        var userPaths: [String] = []
+        let plan = Self.plan(for: paths, myUID: myUID, fileManager: fm)
+        let simulator = plan.simulator
+        let rootPaths = plan.rootPaths
+        let userPaths = plan.userPaths
 
-        for p in paths {
-            guard p.hasPrefix("/"), p.count > 1, !adminProtectedRoots.contains(p) else { continue }
-            if p.hasPrefix("/Library/Developer/CoreSimulator") { simulator = true; continue }
-            let owner = (try? fm.attributesOfItem(atPath: p))?[.ownerAccountID] as? NSNumber
-            if let owner, owner.uint32Value == myUID {
-                userPaths.append(p)
-            } else {
-                rootPaths.append(p)
-            }
+        if !plan.rejected.isEmpty {
+            log("⚠︎ \(plan.rejected.count) path(s) refused as protected system locations:")
+            plan.rejected.forEach { log("⚠︎   \($0)") }
         }
 
-        let attempted = rootPaths.count + userPaths.count + (simulator ? 1 : 0)
-        guard attempted > 0 else {
-            return AdminDeleteResult(attempted: 0, removed: 0, cancelled: false,
-                                     needsFullDiskAccess: [], failed: [])
+        var attempted = rootPaths.count + userPaths.count
+        guard attempted > 0 || simulator else {
+            return AdminDeleteResult(
+                attempted: 0, removed: 0, cancelled: false,
+                needsFullDiskAccess: [], failed: [], rejected: plan.rejected)
         }
 
         var removed = 0
@@ -93,8 +130,10 @@ final class AdminDeleter: @unchecked Sendable {
                     log("✓ \(p)")
                 } catch {
                     let ns = error as NSError
-                    if ns.domain == NSCocoaErrorDomain, (ns.underlyingErrors.first as NSError?)?.code == 1
-                        || "\(error)".localizedCaseInsensitiveContains("permitted") {
+                    if ns.domain == NSCocoaErrorDomain,
+                        (ns.underlyingErrors.first as NSError?)?.code == 1
+                            || "\(error)".localizedCaseInsensitiveContains("permitted")
+                    {
                         needsFDA.append(p)
                         log("⚠︎ \(p): needs Full Disk Access")
                     } else {
@@ -108,45 +147,59 @@ final class AdminDeleter: @unchecked Sendable {
         if !rootPaths.isEmpty && !cancelled && !isCancelled {
             phase("Removing \(rootPaths.count) system items — authorize when prompted…")
             log("→ Requesting administrator access for \(rootPaths.count) root-owned items")
-            let inner = rootPaths
-                .map { "echo 'rm: \(Self.echoSafe($0))'; /bin/rm -rf \(Self.shellQuote($0)) 2>&1 || echo 'FAILED: \(Self.echoSafe($0))'" }
-                .joined(separator: "; ")
-            let apple = "do shell script \"\(Self.appleEscape(inner))\" with administrator privileges"
-            let (status, out) = await runProc("/usr/bin/osascript", ["-e", apple], stream: false, log: log)
+            let inner = "/bin/rm -rf " + rootPaths.map(Shell.quote).joined(separator: " ")
+            let apple = "do shell script \(Shell.appleScriptLiteral(inner)) with administrator privileges"
+            let (status, out, err) = await runProc(SystemPaths.osascript, ["-e", apple], stream: false, log: log)
 
             if isCancelled {
                 cancelled = true
-            } else if out.contains("-128") || out.localizedCaseInsensitiveContains("User canceled") {
+            } else if Shell.indicatesCancellation(out + err) {
                 cancelled = true
                 log("Administrator access cancelled.")
             } else {
-                for line in out.split(whereSeparator: { $0 == "\n" }) {
+                for line in (out + err).split(whereSeparator: { $0 == "\n" }) where !line.isEmpty {
                     log(String(line))
                 }
-                var failedRoots = 0
-                for line in out.split(whereSeparator: { $0 == "\n" }) where line.hasPrefix("FAILED:") {
-                    failedRoots += 1
-                    failed.append(String(line.dropFirst(8)).trimmingCharacters(in: .whitespaces))
-                }
-                if status != 0 && out.isEmpty {
+                if status != 0 && out.isEmpty && err.isEmpty {
                     failed.append(contentsOf: rootPaths)
                     log("Administrator removal failed to start.")
                 } else {
-                    removed += rootPaths.count - failedRoots
+                    for p in rootPaths {
+                        if fm.fileExists(atPath: p) {
+                            failed.append(p)
+                            log("✗ \(p)")
+                        } else {
+                            removed += 1
+                            log("✓ \(p)")
+                        }
+                    }
                 }
             }
         }
 
         if simulator && !cancelled && !isCancelled {
             phase("Listing simulator runtimes…")
-            let (_, listOut) = await runProc("/usr/bin/xcrun", ["simctl", "runtime", "list", "-j"], stream: false, log: nil)
+            let (listStatus, listOut, listErr) = await runProc(
+                SystemPaths.xcrun, ["simctl", "runtime", "list", "-j"], stream: false, log: nil)
+
+            guard listStatus == 0 else {
+                let detail = listErr.trimmingCharacters(in: .whitespacesAndNewlines)
+                failed.append("Simulator runtimes could not be listed\(detail.isEmpty ? "" : ": \(detail)")")
+                log("✗ Could not list simulator runtimes (xcrun exit \(listStatus))")
+                return AdminDeleteResult(
+                    attempted: attempted + 1, removed: removed, cancelled: cancelled,
+                    needsFullDiskAccess: needsFDA, failed: failed, rejected: plan.rejected)
+            }
+
             let runtimes = Self.parseRuntimes(listOut)
+            attempted += runtimes.count
             log("Found \(runtimes.count) simulator runtimes")
             for rt in runtimes {
                 if isCancelled { cancelled = true; break }
                 phase("Deleting simulator runtime \(rt.label)…")
                 log("Deleting \(rt.label) [\(rt.id)]…")
-                let (status, _) = await runProc("/usr/bin/xcrun", ["simctl", "runtime", "delete", rt.id], stream: true, log: log)
+                let (status, _, _) = await runProc(
+                    SystemPaths.xcrun, ["simctl", "runtime", "delete", rt.id], stream: true, log: log)
                 if status == 0 {
                     removed += 1
                     log("✓ Removed \(rt.label)")
@@ -160,12 +213,15 @@ final class AdminDeleter: @unchecked Sendable {
             }
         }
 
-        return AdminDeleteResult(attempted: attempted, removed: removed, cancelled: cancelled,
-                                 needsFullDiskAccess: needsFDA, failed: failed)
+        return AdminDeleteResult(
+            attempted: attempted, removed: removed, cancelled: cancelled,
+            needsFullDiskAccess: needsFDA, failed: failed, rejected: plan.rejected)
     }
 
-    private func runProc(_ exe: String, _ args: [String], stream: Bool,
-                         log: (@Sendable (String) -> Void)?) async -> (Int32, String) {
+    func runProc(
+        _ exe: String, _ args: [String], stream: Bool,
+        log: (@Sendable (String) -> Void)?
+    ) async -> (Int32, String, String) {
         await withCheckedContinuation { cont in
             let p = Process()
             p.executableURL = URL(fileURLWithPath: exe)
@@ -175,12 +231,26 @@ final class AdminDeleter: @unchecked Sendable {
             p.standardOutput = outPipe
             p.standardError = errPipe
             let outBox = OutputBox()
+            let errBox = OutputBox()
 
-            let makeHandler: (Bool) -> (@Sendable (FileHandle) -> Void) = { isOut in
+            let completion = CompletionLatch()
+
+            let finish: @Sendable (Int32) -> Void = { status in
+                guard completion.markDoneIfReady(status: status) else { return }
+                self.setProcess(nil)
+                cont.resume(returning: (completion.status, outBox.text, errBox.text))
+            }
+
+            let makeHandler: @Sendable (OutputBox, @escaping @Sendable () -> Void) -> (@Sendable (FileHandle) -> Void) = { box, onEOF in
                 { fh in
                     let d = fh.availableData
-                    guard !d.isEmpty, let s = String(data: d, encoding: .utf8) else { return }
-                    if isOut { outBox.append(s) }
+                    guard !d.isEmpty else {
+                        fh.readabilityHandler = nil
+                        onEOF()
+                        return
+                    }
+                    guard let s = String(data: d, encoding: .utf8) else { return }
+                    box.append(s)
                     if stream, let log {
                         for line in s.split(whereSeparator: { $0 == "\n" || $0 == "\r" }) where !line.isEmpty {
                             log(String(line))
@@ -188,40 +258,52 @@ final class AdminDeleter: @unchecked Sendable {
                     }
                 }
             }
-            outPipe.fileHandleForReading.readabilityHandler = makeHandler(true)
-            errPipe.fileHandleForReading.readabilityHandler = makeHandler(false)
+
+            outPipe.fileHandleForReading.readabilityHandler =
+                makeHandler(outBox) { completion.signalStreamEOF(); finish(0) }
+            errPipe.fileHandleForReading.readabilityHandler =
+                makeHandler(errBox) { completion.signalStreamEOF(); finish(0) }
 
             p.terminationHandler = { proc in
-                outPipe.fileHandleForReading.readabilityHandler = nil
-                errPipe.fileHandleForReading.readabilityHandler = nil
-                if let tail = try? outPipe.fileHandleForReading.readToEnd(), let s = String(data: tail, encoding: .utf8) {
-                    outBox.append(s)
+                completion.signalExit(status: proc.terminationStatus)
+                finish(proc.terminationStatus)
+                DispatchQueue.global().asyncAfter(deadline: .now() + Self.drainGrace) {
+                    outPipe.fileHandleForReading.readabilityHandler = nil
+                    errPipe.fileHandleForReading.readabilityHandler = nil
+                    guard completion.forceDone(status: proc.terminationStatus) else { return }
+                    self.setProcess(nil)
+                    cont.resume(returning: (proc.terminationStatus, outBox.text, errBox.text))
                 }
-                self.setProcess(nil)
-                cont.resume(returning: (proc.terminationStatus, outBox.text))
             }
 
-            if isCancelled {
+            func abandon(_ status: Int32) {
                 outPipe.fileHandleForReading.readabilityHandler = nil
                 errPipe.fileHandleForReading.readabilityHandler = nil
-                cont.resume(returning: (-999, ""))
+                p.terminationHandler = nil
+                guard completion.forceDone(status: status) else { return }
+                cont.resume(returning: (status, "", ""))
+            }
+
+            guard !isCancelled else {
+                abandon(ProcExit.cancelledBeforeStart)
                 return
             }
-            setProcess(p)
             do {
                 try p.run()
             } catch {
-                outPipe.fileHandleForReading.readabilityHandler = nil
-                errPipe.fileHandleForReading.readabilityHandler = nil
                 setProcess(nil)
-                cont.resume(returning: (-998, ""))
+                abandon(ProcExit.failedToLaunch)
+                return
             }
+            setProcess(p)
+            if isCancelled { p.terminate() }
         }
     }
 
     private static func parseRuntimes(_ json: String) -> [(id: String, label: String)] {
         guard let data = json.data(using: .utf8),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [] }
+            let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return [] }
         var out: [(String, String)] = []
         for (id, value) in obj {
             guard let v = value as? [String: Any] else { continue }
@@ -233,16 +315,57 @@ final class AdminDeleter: @unchecked Sendable {
         return out.sorted { $0.1 < $1.1 }
     }
 
-    private static func shellQuote(_ s: String) -> String {
-        "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    struct DeletionPlan: Equatable {
+        var simulator = false
+        var rootPaths: [String] = []
+        var userPaths: [String] = []
+        var rejected: [String] = []
     }
 
-    private static func echoSafe(_ s: String) -> String {
-        s.replacingOccurrences(of: "'", with: "")
+    private static let volumeContainers = ["/Volumes", "/System/Volumes"]
+
+    static func isProtected(_ path: String) -> Bool {
+        guard path.hasPrefix("/") else { return true }
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+        let std = url.path
+
+        if std.count <= 1 || adminProtectedRoots.contains(std) { return true }
+
+        for container in volumeContainers where std.hasPrefix(container + "/") {
+            let remainder = std.dropFirst(container.count + 1)
+            if !remainder.contains("/") { return true }
+        }
+
+        if let values = try? url.resourceValues(forKeys: [.volumeURLKey]),
+           let volume = values.volume?.standardizedFileURL,
+           volume.path == std {
+            return true
+        }
+
+        return false
     }
 
-    private static func appleEscape(_ s: String) -> String {
-        s.replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
+    static func plan(for paths: [String], myUID: uid_t, fileManager fm: FileManager) -> DeletionPlan {
+        var plan = DeletionPlan()
+        for p in paths {
+            guard !isProtected(p) else {
+                plan.rejected.append(p)
+                continue
+            }
+            let std = URL(fileURLWithPath: p).standardizedFileURL.path
+            if std.hasPrefix(SystemPaths.coreSimulator) {
+                plan.simulator = true
+                continue
+            }
+            let owner = (try? fm.attributesOfItem(atPath: std))?[.ownerAccountID] as? NSNumber
+            if let owner, owner.uint32Value == myUID {
+                plan.userPaths.append(std)
+            } else {
+                plan.rootPaths.append(std)
+            }
+        }
+        return plan
     }
+
+
 }

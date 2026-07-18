@@ -83,6 +83,7 @@ actor ScanEngine {
                 var items: [ScanItem] = []
                 var total: Int64 = 0
                 for e in r.entries {
+                    guard k < sizes.count else { break }
                     let size = sizes[k]
                     k += 1
                     guard size > 0 else { continue }
@@ -104,7 +105,11 @@ actor ScanEngine {
             }
         }
 
-        progress(ScanProgress(phase: "Done", fraction: 1.0))
+        if Task.isCancelled {
+            progress(ScanProgress(phase: "Cancelled", fraction: 0))
+        } else {
+            progress(ScanProgress(phase: "Done", fraction: 1.0))
+        }
         return results
     }
 

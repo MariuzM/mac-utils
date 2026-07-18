@@ -5,21 +5,29 @@ struct BackupSummary: Sendable {
     let copied: Int
     let failed: Int
     let bytes: Int64
-    let failures: [String]
+    let failures: [(path: String, reason: String)]
+    let setupError: String?
 }
 
 actor BackupManager {
     func run(items: [ScanItem], progress: @escaping @Sendable (Double, String) -> Void) async -> BackupSummary {
         let fm = FileManager()
-        let desktop = fm.urls(for: .desktopDirectory, in: .userDomainMask).first
+        let desktop =
+            fm.urls(for: .desktopDirectory, in: .userDomainMask).first
             ?? fm.homeDirectoryForCurrentUser.appendingPathComponent("Desktop")
         let root = desktop.appendingPathComponent("macOS Utility Backup \(Self.timestamp())")
-        try? fm.createDirectory(at: root, withIntermediateDirectories: true)
+        do {
+            try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        } catch {
+            return BackupSummary(
+                destination: root, copied: 0, failed: items.count, bytes: 0,
+                failures: [], setupError: "Could not create the backup folder: \(error.localizedDescription)")
+        }
 
         var copied = 0
         var failed = 0
         var bytes: Int64 = 0
-        var failures: [String] = []
+        var failures: [(path: String, reason: String)] = []
         let total = max(items.count, 1)
 
         for (i, item) in items.enumerated() {
@@ -33,19 +41,21 @@ actor BackupManager {
             do {
                 try fm.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
                 if fm.fileExists(atPath: dest.path) {
-                    try? fm.removeItem(at: dest)
+                    try fm.removeItem(at: dest)
                 }
                 try fm.copyItem(at: item.url, to: dest)
                 copied += 1
                 bytes += item.size
             } catch {
                 failed += 1
-                failures.append(path)
+                failures.append((path: path, reason: error.localizedDescription))
             }
         }
 
         progress(1.0, "Done")
-        return BackupSummary(destination: root, copied: copied, failed: failed, bytes: bytes, failures: failures)
+        return BackupSummary(
+            destination: root, copied: copied, failed: failed, bytes: bytes,
+            failures: failures, setupError: nil)
     }
 
     private static func timestamp() -> String {

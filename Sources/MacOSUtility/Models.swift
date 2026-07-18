@@ -54,10 +54,14 @@ struct VolumeResult: Identifiable, Hashable {
 }
 
 enum ByteFormat {
-    static func string(_ bytes: Int64) -> String {
+    private static let formatter: ByteCountFormatter = {
         let f = ByteCountFormatter()
         f.countStyle = .file
         f.allowsNonnumericFormatting = false
-        return f.string(fromByteCount: bytes)
+        return f
+    }()
+
+    static func string(_ bytes: Int64) -> String {
+        formatter.string(fromByteCount: bytes)
     }
 }

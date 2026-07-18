@@ -12,6 +12,9 @@ final class SpotlightViewModel: ObservableObject {
     @Published var showError = false
 
     private var expectingChange = false
+    private var loadTask: Task<Void, Never>?
+
+    deinit { loadTask?.cancel() }
 
     func refreshIfExpectingChange() {
         guard expectingChange else { return }
@@ -23,7 +26,8 @@ final class SpotlightViewModel: ObservableObject {
         guard !isWorking else { return }
         isWorking = true
         status = "Reading Spotlight privacy list…"
-        Task {
+        loadTask?.cancel()
+        loadTask = Task {
             do {
                 let paths = try await Task.detached(priority: .userInitiated) {
                     try SpotlightManager.loadExclusions()

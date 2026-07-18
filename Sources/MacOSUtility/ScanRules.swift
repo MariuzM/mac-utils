@@ -10,20 +10,28 @@ struct ScanRule {
 }
 
 enum ScanRules {
+    static func exists(_ url: URL) -> Bool {
+        FileManager.default.fileExists(atPath: url.path)
+    }
+
+    static func rule(_ id: String, _ title: String, _ subtitle: String, _ safety: SafetyLevel,
+                     _ paths: [URL], expand: Bool = true) -> ScanRule? {
+        let present = paths.filter(exists)
+        guard !present.isEmpty else { return nil }
+        return ScanRule(id: id, title: title, subtitle: subtitle, safety: safety, paths: present, expandChildren: expand)
+    }
+
+    static func rule(_ id: String, _ title: String, _ subtitle: String, _ safety: SafetyLevel,
+                     _ paths: [String], expand: Bool = true) -> ScanRule? {
+        rule(id, title, subtitle, safety, paths.map { URL(fileURLWithPath: $0) }, expand: expand)
+    }
+
     static func homeRules() -> [ScanRule] {
         let home = FileManager.default.homeDirectoryForCurrentUser
         let lib = home.appendingPathComponent("Library")
         let dev = lib.appendingPathComponent("Developer")
 
-        func exists(_ url: URL) -> Bool {
-            FileManager.default.fileExists(atPath: url.path)
-        }
 
-        func rule(_ id: String, _ title: String, _ subtitle: String, _ safety: SafetyLevel, _ paths: [URL], expand: Bool = true) -> ScanRule? {
-            let present = paths.filter(exists)
-            guard !present.isEmpty else { return nil }
-            return ScanRule(id: id, title: title, subtitle: subtitle, safety: safety, paths: present, expandChildren: expand)
-        }
 
         let candidates: [ScanRule?] = [
             rule("user-caches", "User Caches", "App caches in ~/Library/Caches — regenerated on demand.", .safe,
@@ -94,9 +102,6 @@ enum ScanRules {
     }
 
     static func systemRules() -> [ScanRule] {
-        func exists(_ url: URL) -> Bool {
-            FileManager.default.fileExists(atPath: url.path)
-        }
 
         func rule(_ id: String, _ title: String, _ subtitle: String, _ safety: SafetyLevel, _ paths: [String], expand: Bool = true) -> ScanRule? {
             let urls = paths.map { URL(fileURLWithPath: $0) }.filter(exists)
@@ -134,9 +139,6 @@ enum ScanRules {
     }
 
     static func volumeRules(for volume: URL) -> [ScanRule] {
-        func exists(_ url: URL) -> Bool {
-            FileManager.default.fileExists(atPath: url.path)
-        }
 
         var rules: [ScanRule] = []
         let trashes = volume.appendingPathComponent(".Trashes")
