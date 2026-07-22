@@ -39,7 +39,10 @@ enum HelperControl {
         FileManager.default.fileExists(atPath: agentURL.path)
     }
 
-    private static let legacyLabels = ["mariuzm.macosutility.folderhelper", "dev.marius.rekey.folderhelper"]
+    private static let legacyLabels = [
+        "mariuzm.macosutility.folderhelper", "dev.marius.rekey.folderhelper",
+        "dev.marius.macosutility.folderhelper",
+    ]
 
     static func migrateLegacyLoginItems() {
         for label in legacyLabels {

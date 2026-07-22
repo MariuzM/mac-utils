@@ -1,5 +1,5 @@
 import XCTest
-@testable import MacOSUtility
+@testable import MacUtils
 
 final class ShellEscapingTests: XCTestCase {
     func testQuoteWrapsPlainPaths() {

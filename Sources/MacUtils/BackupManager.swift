@@ -15,7 +15,7 @@ actor BackupManager {
         let desktop =
             fm.urls(for: .desktopDirectory, in: .userDomainMask).first
             ?? fm.homeDirectoryForCurrentUser.appendingPathComponent("Desktop")
-        let root = desktop.appendingPathComponent("macOS Utility Backup \(Self.timestamp())")
+        let root = desktop.appendingPathComponent("Mac Utils Backup \(Self.timestamp())")
         do {
             try fm.createDirectory(at: root, withIntermediateDirectories: true)
         } catch {

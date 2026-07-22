@@ -5,6 +5,25 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-07-22
+
+### Added
+
+- **Extensions** tab: choose which app opens each file extension, grouped by kind (Audio, Video,
+  Images, Text & Documents, Development, Archives, Fonts, Other), with search and an "Other…"
+  picker for unregistered apps. Defaults are set per file *type*, so `.jpg` and `.jpeg` change
+  together.
+
+### Changed
+
+- Project renamed from **macOS Utility** to **Mac Utils** — repo (`MariuzM/mac-utils`), app bundle
+  (`build/Mac Utils.app`), binary (`MacUtils`), bundle ids (`dev.marius.macutils`,
+  `dev.marius.macutils.folderhelper`), rekey daemon (`dev.marius.macutils.rekey`), shared defaults
+  suite, backup folder name, and signing identity (`mac-utils Dev`). Old rekey daemons and helper
+  login items are removed automatically; shared settings migrate on first launch. Re-grant Full
+  Disk Access and Accessibility (grants are keyed to the bundle id), and create a new `mac-utils
+  Dev` certificate for stable signing.
+
 ## [0.4.0] - 2026-07-18
 
 ### Added
@@ -93,5 +112,6 @@ Initial release.
 - Console with live output, working Cancel, and a watchdog for long operations.
 - Spotlight Privacy tab.
 
-[0.2.0]: https://github.com/MariuzM/macos-utility/releases/tag/v0.2.0
-[0.1.0]: https://github.com/MariuzM/macos-utility/releases/tag/v0.1.0
+[0.5.0]: https://github.com/MariuzM/mac-utils/releases/tag/v0.5.0
+[0.2.0]: https://github.com/MariuzM/mac-utils/releases/tag/v0.2.0
+[0.1.0]: https://github.com/MariuzM/mac-utils/releases/tag/v0.1.0

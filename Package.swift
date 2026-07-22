@@ -2,7 +2,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "MacOSUtility",
+    name: "mac-utils",
     platforms: [
         .macOS(.v13)
     ],
@@ -12,9 +12,9 @@ let package = Package(
             path: "Sources/FolderKit"
         ),
         .executableTarget(
-            name: "MacOSUtility",
+            name: "MacUtils",
             dependencies: ["FolderKit"],
-            path: "Sources/MacOSUtility"
+            path: "Sources/MacUtils"
         ),
         .executableTarget(
             name: "FolderHelper",
@@ -27,9 +27,9 @@ let package = Package(
             path: "Tests/FolderKitTests"
         ),
         .testTarget(
-            name: "MacOSUtilityTests",
-            dependencies: ["MacOSUtility"],
-            path: "Tests/MacOSUtilityTests"
+            name: "MacUtilsTests",
+            dependencies: ["MacUtils"],
+            path: "Tests/MacUtilsTests"
         ),
     ]
 )

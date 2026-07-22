@@ -1,5 +1,5 @@
 import XCTest
-@testable import MacOSUtility
+@testable import MacUtils
 
 final class AdminDeleterSafetyTests: XCTestCase {
     func testRejectsProtectedRoots() {

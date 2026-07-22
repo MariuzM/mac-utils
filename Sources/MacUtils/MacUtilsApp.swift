@@ -2,7 +2,7 @@ import SwiftUI
 import FolderKit
 
 @main
-struct MacOSUtilityApp: App {
+struct MacUtilsApp: App {
     @StateObject private var folderStore = FolderStore()
     @State private var configObserver: NSObjectProtocol?
 

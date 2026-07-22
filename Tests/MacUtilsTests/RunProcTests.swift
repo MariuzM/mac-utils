@@ -1,5 +1,5 @@
 import XCTest
-@testable import MacOSUtility
+@testable import MacUtils
 
 final class RunProcTests: XCTestCase {
     private func runProc(_ args: [String], stream: Bool = false) async -> (Int32, String, String) {

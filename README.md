@@ -1,4 +1,4 @@
-# macOS Utility
+# Mac Utils
 
 A native SwiftUI app that scans your Mac and every mounted volume for removable files — caches,
 logs, trash, developer junk, temporary files — grouped per drive. Review what's found, back it up,
@@ -11,7 +11,7 @@ or delete it.
   selection.
 - **node_modules** folders are searched per drive and grouped by the folder that contains the
   projects, so each location is its own category.
-- **Back up** to `~/Desktop/macOS Utility Backup <timestamp>/`, keeping each item's original path so
+- **Back up** to `~/Desktop/Mac Utils Backup <timestamp>/`, keeping each item's original path so
   you can see where it came from.
 - **Delete** via Move to Trash or permanent delete. Protected items are handled the right way —
   root-owned with your admin password, simulator runtimes via `simctl`.
@@ -27,7 +27,7 @@ or delete it.
 
 ```bash
 make dev            # build & run for development (no .app bundle — Folders needs `make r`)
-make build          # release build -> build/macOS Utility.app
+make build          # release build -> build/Mac Utils.app
 make r              # rebuild, restart the app and the helper
 make test           # run the test suite
 make tcc            # reset Accessibility grants for the app and helper
@@ -37,12 +37,12 @@ Grant **Full Disk Access** (System Settings → Privacy & Security) to scan and 
 locations. Without it, those locations are skipped.
 
 Dock Folders additionally needs **Accessibility** access — granted to the *helper*
-(`macOS Utility Helper`), not the app.
+(`Mac Utils Helper`), not the app.
 
 ### Signing
 
 `make build` works anywhere with no setup: if a code-signing certificate named
-`macOS Utility Dev` is in your keychain it signs with that, otherwise it falls back to ad-hoc
+`mac-utils Dev` is in your keychain it signs with that, otherwise it falls back to ad-hoc
 signing and says so.
 
 The distinction only matters for permissions. macOS ties an Accessibility or Full Disk Access
@@ -55,7 +55,7 @@ So ad-hoc is fine for a one-off build, and worth avoiding if you are iterating o
 Folders feature, which needs Accessibility.
 
 To create the certificate: Keychain Access → Certificate Assistant → Create a Certificate →
-name it `macOS Utility Dev`, identity type Self Signed Root, certificate type Code Signing.
+name it `mac-utils Dev`, identity type Self Signed Root, certificate type Code Signing.
 
 ```bash
 make build                                 # auto: certificate if present, else ad-hoc

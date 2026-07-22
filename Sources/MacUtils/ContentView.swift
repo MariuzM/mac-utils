@@ -7,6 +7,7 @@ enum AppTab: Hashable {
     case spotlight
     case rekey
     case folders
+    case extensions
 }
 
 struct ContentView: View {
@@ -14,6 +15,7 @@ struct ContentView: View {
     @StateObject private var scanVM = ScanViewModel()
     @StateObject private var spotlightVM = SpotlightViewModel()
     @StateObject private var rekeyStore = MappingStore()
+    @StateObject private var extensionsVM = ExtensionsViewModel()
     @State private var tab: AppTab? = .cleaner
     @State private var showSidebar = true
 
@@ -29,6 +31,8 @@ struct ContentView: View {
                         .tag(AppTab.rekey)
                     Label("Folders", systemImage: "folder")
                         .tag(AppTab.folders)
+                    Label("Extensions", systemImage: "arrow.up.forward.app")
+                        .tag(AppTab.extensions)
                 }
                 .listStyle(.sidebar)
                 .frame(width: 200)
@@ -46,6 +50,8 @@ struct ContentView: View {
                     RekeyView(store: rekeyStore)
                 case .folders:
                     FoldersView(store: folderStore)
+                case .extensions:
+                    ExtensionsView(vm: extensionsVM)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

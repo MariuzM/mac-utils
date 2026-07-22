@@ -14,10 +14,10 @@ enum LaunchDaemonError: LocalizedError {
 
 @MainActor
 enum LaunchDaemon {
-    static let label = "dev.marius.macosutility.rekey"
-    static let installPath = "/Library/LaunchDaemons/dev.marius.macosutility.rekey.plist"
+    static let label = "dev.marius.macutils.rekey"
+    static let installPath = "/Library/LaunchDaemons/dev.marius.macutils.rekey.plist"
 
-    static let legacyLabels = ["mariuzm.rekey", "dev.marius.rekey"]
+    static let legacyLabels = ["mariuzm.rekey", "dev.marius.rekey", "dev.marius.macosutility.rekey"]
 
     private static func plistPath(for label: String) -> String {
         "/Library/LaunchDaemons/\(label).plist"

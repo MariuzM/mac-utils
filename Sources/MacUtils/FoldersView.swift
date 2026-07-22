@@ -30,7 +30,7 @@ struct FoldersView: View {
 
                 Divider()
 
-                AboutFooter(component: "macOS Utility")
+                AboutFooter(component: "Mac Utils")
             }
             .padding(20)
             .frame(maxWidth: 480, alignment: .leading)
@@ -64,7 +64,7 @@ struct FoldersView: View {
         Text("Background Helper")
             .font(.headline)
 
-        Text("“macOS Utility Helper” by \(Developer.name) runs in the background so this window doesn't need to stay open. It owns the Dock override and the menu bar list.")
+        Text("“Mac Utils Helper” by \(Developer.name) runs in the background so this window doesn't need to stay open. It owns the Dock override and the menu bar list.")
             .font(.subheadline)
             .foregroundStyle(.secondary)
 
@@ -174,7 +174,7 @@ struct FoldersView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Label("Accessibility permission required", systemImage: "lock")
                     .foregroundStyle(.orange)
-                Text("The helper — “macOS Utility Helper (\(Developer.name))” — needs its own Accessibility access to intercept Dock clicks. This app doesn't need it.")
+                Text("The helper — “Mac Utils Helper (\(Developer.name))” — needs its own Accessibility access to intercept Dock clicks. This app doesn't need it.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 HStack {

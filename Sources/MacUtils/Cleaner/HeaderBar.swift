@@ -8,7 +8,7 @@ struct HeaderBar: View {
     var body: some View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("macOS Utility")
+                Text("Mac Utils")
                     .font(.headline)
                 if vm.hasScanned && !vm.isScanning {
                     Text("\(ByteFormat.string(vm.totalReclaimable)) reclaimable · \(vm.totalItems) items")

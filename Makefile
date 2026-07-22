@@ -1,20 +1,20 @@
-APP = build/macOS Utility.app
+APP = build/Mac Utils.app
 HELPER = $(APP)/Contents/Library/LoginItems/FolderHelper.app
 
-VERSION = 0.4.0
-BUILD_NUMBER = 4
+VERSION = 0.5.0
+BUILD_NUMBER = 5
 
-APP_ID = dev.marius.macosutility
-HELPER_ID = dev.marius.macosutility.folderhelper
+APP_ID = dev.marius.macutils
+HELPER_ID = dev.marius.macutils.folderhelper
 
-PREFERRED_SIGN_ID = macOS Utility Dev
+PREFERRED_SIGN_ID = mac-utils Dev
 SIGN_ID ?= $(shell security find-identity -v -p codesigning 2>/dev/null \
 	| grep -qF '$(PREFERRED_SIGN_ID)' && echo '$(PREFERRED_SIGN_ID)' || echo '-')
 
 .PHONY: dev build r test clean status reset helper-stop helper-start tcc
 
 dev:
-	swift run MacOSUtility
+	swift run MacUtils
 
 test:
 	swift test
@@ -24,7 +24,7 @@ build:
 	rm -rf "$(APP)"
 	mkdir -p "$(APP)/Contents/MacOS"
 	mkdir -p "$(HELPER)/Contents/MacOS"
-	cp .build/release/MacOSUtility "$(APP)/Contents/MacOS/MacOSUtility"
+	cp .build/release/MacUtils "$(APP)/Contents/MacOS/MacUtils"
 	cp Resources/Info.plist "$(APP)/Contents/Info.plist"
 	cp .build/release/FolderHelper "$(HELPER)/Contents/MacOS/FolderHelper"
 	cp Resources/HelperInfo.plist "$(HELPER)/Contents/Info.plist"
@@ -47,7 +47,7 @@ build:
 r:
 	@$(MAKE) build
 	@$(MAKE) helper-stop
-	@pkill -x MacOSUtility 2>/dev/null && sleep 1 || true
+	@pkill -x MacUtils 2>/dev/null && sleep 1 || true
 	open "$(APP)"
 	@$(MAKE) helper-start
 
