@@ -1,6 +1,6 @@
+import AppKit
 import Foundation
 import SwiftUI
-import AppKit
 import UniformTypeIdentifiers
 
 @MainActor
@@ -44,6 +44,10 @@ final class ExtensionsViewModel: ObservableObject {
             let result = await Task.detached(priority: .userInitiated) {
                 ExtensionCatalog.buildEntries()
             }.value
+            guard !Task.isCancelled else {
+                isWorking = false
+                return
+            }
             entries = result
             loaded = true
             isWorking = false
@@ -51,7 +55,7 @@ final class ExtensionsViewModel: ObservableObject {
     }
 
     func setDefault(_ app: HandlerApp, for entry: ExtensionEntry) {
-        guard let typeID = entry.typeID, let type = UTType(typeID) else { return }
+        guard !isWorking, let typeID = entry.typeID, let type = UTType(typeID) else { return }
         isWorking = true
         Task {
             do {

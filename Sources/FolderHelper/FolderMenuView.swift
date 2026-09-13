@@ -1,6 +1,6 @@
+import AppKit
 import FolderKit
 import SwiftUI
-import AppKit
 
 struct FolderMenuView: View {
     @ObservedObject var store: FolderStore
@@ -44,7 +44,7 @@ struct FolderMenuView: View {
         .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .onAppear { reload() }
-        .onChange(of: stack) { _ in reload() }
+        .onChange(of: stack) { _, _ in reload() }
     }
 
     private var header: some View {

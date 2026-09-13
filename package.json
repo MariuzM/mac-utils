@@ -1,0 +1,24 @@
+{
+  "name": "mac-utils",
+  "version": "0.8.0",
+  "private": true,
+  "description": "Native macOS 27 utilities",
+  "config": {
+    "buildNumber": 8
+  },
+  "scripts": {
+    "dev": "python3 scripts/app.py dev",
+    "build": "python3 scripts/app.py build",
+    "start": "python3 scripts/app.py start",
+    "r": "python3 scripts/app.py restart",
+    "check": "python3 scripts/app.py check",
+    "format": "python3 scripts/app.py format",
+    "format:check": "python3 scripts/app.py format-check",
+    "clean": "python3 scripts/app.py clean",
+    "helper:start": "python3 scripts/app.py helper-start",
+    "helper:stop": "python3 scripts/app.py helper-stop",
+    "keys:status": "python3 scripts/app.py keys-status",
+    "keys:reset": "python3 scripts/app.py keys-reset",
+    "permissions:reset": "python3 scripts/app.py permissions-reset"
+  }
+}

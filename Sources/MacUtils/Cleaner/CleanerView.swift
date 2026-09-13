@@ -1,6 +1,6 @@
-import SwiftUI
 import AppKit
 import FolderKit
+import SwiftUI
 
 struct CleanerView: View {
     @ObservedObject var vm: ScanViewModel
@@ -9,10 +9,9 @@ struct CleanerView: View {
         VStack(spacing: 0) {
             HeaderBar(vm: vm)
             Divider()
-            if !vm.fullDiskAccess {
-                FullDiskAccessBanner(vm: vm)
-                Divider()
-            }
+            FullDiskAccessBanner(vm: vm)
+            ScanIssuesView(issues: vm.scanIssues, omittedCount: vm.omittedIssueCount)
+            Divider()
             content
             if vm.showConsole {
                 Divider()
@@ -21,7 +20,10 @@ struct CleanerView: View {
         }
         .frame(minWidth: 600, minHeight: 480)
         .onAppear { vm.refreshAccess() }
-        .alert("Backup complete", isPresented: $vm.showBackupResult, presenting: vm.lastBackup) { summary in
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            vm.refreshAccess()
+        }
+        .alert("Backup finished", isPresented: $vm.showBackupResult, presenting: vm.lastBackup) { summary in
             Button("Reveal in Finder") {
                 NSWorkspace.shared.activateFileViewerSelecting([summary.destination])
             }
@@ -39,8 +41,8 @@ struct CleanerView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(
-                "Move to Trash is recoverable but can't remove root-owned system items.\n"
-                    + "Delete as Administrator (asks for your password) removes those permanently and cleans simulator runtimes properly."
+                "Move to Trash is recoverable. Some items may require additional permission.\n"
+                    + "Delete as Administrator (asks for your password) deletes permanently without using the Trash. It does not bypass macOS privacy or system protection."
                     + (vm.pendingReviewCount > 0
                         ? "\n\n\(vm.pendingReviewCount) of these are flagged “Review first.”" : ""))
         }
@@ -48,20 +50,17 @@ struct CleanerView: View {
             vm.lastDelete?.mode == .trash ? "Moved to Trash" : "Deleted", isPresented: $vm.showDeleteResult,
             presenting: vm.lastDelete
         ) { summary in
-            if summary.failed > 0 {
-                Button("Remove \(summary.failed) protected items…") { vm.retryFailedAsAdmin() }
+            if !summary.retryablePaths.isEmpty {
+                Button("Retry \(summary.retryablePaths.count) as administrator…", role: .destructive) {
+                    vm.retryFailedAsAdmin()
+                }
             }
             Button("OK", role: .cancel) {}
         } message: { summary in
-            Text(
-                "\(summary.deleted) items (\(ByteFormat.string(summary.bytes))) removed."
-                    + (summary.mode == .trash ? "\nEmpty the Trash to reclaim the space." : "")
-                    + (summary.failed > 0
-                        ? "\n\n\(summary.failed) items are protected. This tries removing them the right way — as you (with Full Disk Access), as administrator, or via simctl for simulators."
-                        : ""))
+            Text(deleteMessage(summary))
         }
         .alert("Cleanup finished", isPresented: $vm.showAdminResult, presenting: vm.lastAdmin) { result in
-            if !result.needsFullDiskAccess.isEmpty {
+            if !result.accessDeniedPaths.isEmpty {
                 Button("Open Full Disk Access…") { FullDiskAccess.openSettings() }
             }
             Button("OK", role: .cancel) {}
@@ -73,6 +72,7 @@ struct CleanerView: View {
     private func backupMessage(_ s: BackupSummary) -> String {
         if let setupError = s.setupError { return setupError }
         var parts = ["\(s.copied) items (\(ByteFormat.string(s.bytes))) copied to\n\(s.destination.path)"]
+        if s.cancelled { parts.append("Backup cancelled before all items were copied.") }
         if s.failed > 0 {
             let detail = s.failures.prefix(3).map { "\($0.path) — \($0.reason)" }.joined(separator: "\n")
             parts.append("\(s.failed) items could not be copied:\n\(detail)")
@@ -80,23 +80,20 @@ struct CleanerView: View {
         return parts.joined(separator: "\n\n")
     }
 
-    private func adminMessage(_ r: AdminDeleteResult) -> String {
-        var parts = ["Removed \(r.removed) of \(r.attempted) items."]
-        if !r.rejected.isEmpty {
-            parts.append("\(r.rejected.count) item(s) were refused because they are protected system locations:\n"
-                         + r.rejected.prefix(3).joined(separator: "\n"))
-        }
-        if r.cancelled { parts.append("Cancelled before finishing.") }
-        if !r.needsFullDiskAccess.isEmpty {
+    private func deleteMessage(_ s: DeleteSummary) -> String {
+        var parts = ["\(s.deleted) items (\(ByteFormat.string(s.bytes))) removed."]
+        if s.mode == .trash { parts.append("Empty the Trash to reclaim space.") }
+        if s.cancelled { parts.append("Cleanup cancelled before all items were processed.") }
+        if !s.issues.isEmpty { parts.append(s.issues.prefix(5).map(\.description).joined(separator: "\n")) }
+        if !s.retryablePaths.isEmpty {
             parts.append(
-                "\(r.needsFullDiskAccess.count) items are protected by macOS privacy. Grant this app Full Disk Access, then delete again — no password needed."
+                "Administrator retry deletes permanently, without using the Trash. It cannot bypass macOS privacy or system protection."
             )
-        }
-        if !r.failed.isEmpty {
-            parts.append("\(r.failed.count) items could not be removed (may be in use or SIP-protected).")
         }
         return parts.joined(separator: "\n\n")
     }
+
+    private func adminMessage(_ r: AdminDeleteResult) -> String { r.message }
 
     @ViewBuilder
     private var content: some View {

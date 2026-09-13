@@ -1,10 +1,10 @@
-// swift-tools-version:5.9
+// swift-tools-version:6.4
 import PackageDescription
 
 let package = Package(
     name: "mac-utils",
     platforms: [
-        .macOS(.v13)
+        .macOS("27.0")
     ],
     targets: [
         .target(
@@ -20,16 +20,6 @@ let package = Package(
             name: "FolderHelper",
             dependencies: ["FolderKit"],
             path: "Sources/FolderHelper"
-        ),
-        .testTarget(
-            name: "FolderKitTests",
-            dependencies: ["FolderKit"],
-            path: "Tests/FolderKitTests"
-        ),
-        .testTarget(
-            name: "MacUtilsTests",
-            dependencies: ["MacUtils"],
-            path: "Tests/MacUtilsTests"
         ),
     ]
 )

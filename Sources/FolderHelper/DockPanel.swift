@@ -1,5 +1,5 @@
-import FolderKit
 import AppKit
+import FolderKit
 import SwiftUI
 
 final class DockPanel: NSPanel {
@@ -24,7 +24,8 @@ final class DockPanelController {
         }
 
         if lastClosedID == item.id, let lastClosedAt,
-           Date().timeIntervalSince(lastClosedAt) < Self.reopenSuppressionWindow {
+            Date().timeIntervalSince(lastClosedAt) < Self.reopenSuppressionWindow
+        {
             self.lastClosedID = nil
             self.lastClosedAt = nil
             return
@@ -62,7 +63,8 @@ final class DockPanelController {
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
-        outsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+        outsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) {
+            [weak self] _ in
             self?.close()
         }
 
@@ -89,12 +91,13 @@ final class DockPanelController {
         var x = item.frame.midX - size.width / 2
         var y = iconTopInCocoa + 8
 
-        let screen = NSScreen.screens.first {
-            $0.frame.contains(NSPoint(x: item.frame.midX, y: primary.frame.maxY - item.frame.midY))
-        } ?? primary
+        let screen =
+            NSScreen.screens.first {
+                $0.frame.contains(NSPoint(x: item.frame.midX, y: primary.frame.maxY - item.frame.midY))
+            } ?? primary
 
         x = min(max(x, screen.visibleFrame.minX + 8), screen.visibleFrame.maxX - size.width - 8)
-        y = min(y, screen.visibleFrame.maxY - size.height - 8)
+        y = max(screen.visibleFrame.minY + 8, min(y, screen.visibleFrame.maxY - size.height - 8))
 
         return NSPoint(x: x, y: y)
     }

@@ -1,6 +1,7 @@
 import AppKit
 import CoreGraphics
 
+@MainActor
 final class DockTap {
     private let lock = NSLock()
     private var overriddenPaths: Set<String> = []
@@ -12,8 +13,6 @@ final class DockTap {
     private var swallowNextMouseUp = false
 
     init() {}
-
-    deinit { stop() }
 
     func setOverriddenPaths(_ paths: Set<String>) {
         lock.lock()
@@ -33,18 +32,21 @@ final class DockTap {
         let mask = (1 << CGEventType.leftMouseDown.rawValue) | (1 << CGEventType.leftMouseUp.rawValue)
         let context = Unmanaged.passUnretained(self).toOpaque()
 
-        guard let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
-            eventsOfInterest: CGEventMask(mask),
-            callback: { _, type, event, context in
-                guard let context else { return Unmanaged.passUnretained(event) }
-                let tap = Unmanaged<DockTap>.fromOpaque(context).takeUnretainedValue()
-                return tap.handle(type: type, event: event)
-            },
-            userInfo: context
-        ) else { return }
+        guard
+            let tap = CGEvent.tapCreate(
+                tap: .cgSessionEventTap,
+                place: .headInsertEventTap,
+                options: .defaultTap,
+                eventsOfInterest: CGEventMask(mask),
+                callback: { _, type, event, context in
+                    guard let context else { return Unmanaged.passUnretained(event) }
+                    let tap = Unmanaged<DockTap>.fromOpaque(context).takeUnretainedValue()
+                    let consumed = MainActor.assumeIsolated { tap.handle(type: type, event: event) == nil }
+                    return consumed ? nil : Unmanaged.passUnretained(event)
+                },
+                userInfo: context
+            )
+        else { return }
 
         let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)

@@ -1,6 +1,6 @@
-import SwiftUI
 import AppKit
 import FolderKit
+import SwiftUI
 
 struct ConsolePanel: View {
     @ObservedObject var vm: ScanViewModel
@@ -49,7 +49,7 @@ struct ConsolePanel: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                 }
-                .onChange(of: vm.consoleLines.count) { _ in
+                .onChange(of: vm.consoleLines.count) { _, _ in
                     if let last = vm.consoleLines.indices.last {
                         withAnimation(.linear(duration: 0.1)) { proxy.scrollTo(last, anchor: .bottom) }
                     }

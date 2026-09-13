@@ -1,6 +1,6 @@
-import SwiftUI
 import AppKit
 import FolderKit
+import SwiftUI
 
 struct FullDiskAccessBanner: View {
     @ObservedObject var vm: ScanViewModel
@@ -8,22 +8,28 @@ struct FullDiskAccessBanner: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "lock.shield")
-                .foregroundStyle(.orange)
+                .foregroundStyle(vm.accessStatus.issues.isEmpty ? Color.secondary : .orange)
             VStack(alignment: .leading, spacing: 1) {
-                Text("Full Disk Access not granted")
+                Text(vm.accessStatus.title)
                     .font(.callout.weight(.medium))
-                Text("System and other-user locations at the root are skipped until you grant access.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Text(
+                    "Grant access to this copy of Mac Utils, then quit and reopen it before rescanning. Administrator access is separate."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
             Spacer()
+            Button("Show App") { FullDiskAccess.revealApp() }
+                .help(
+                    "Grant access to this exact app. If access stops working after a rebuild, remove and re-add it in Full Disk Access."
+                )
             Button("Open Settings") { FullDiskAccess.openSettings() }
             Button {
                 vm.refreshAccess()
             } label: {
                 Image(systemName: "arrow.clockwise")
             }
-            .help("Re-check after granting access")
+            .help("Recheck readable locations; this does not guarantee access to every folder")
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
@@ -64,15 +70,17 @@ struct EmptyState: View {
                 .foregroundStyle(.tint)
             Text(hasScanned ? "No removable files found" : "Scan your Mac for removable files")
                 .font(.title3.weight(.semibold))
-            Text("Caches, logs, trash, developer junk and temporary files across all mounted volumes.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 380)
+            Text(
+                "Review caches, logs, and developer files across your drives. Only safe categories are selected automatically."
+            )
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: 380)
             Button(action: onScan) {
                 Label("Scan Now", systemImage: "magnifyingglass")
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(PrimaryActionStyle())
             .controlSize(.large)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

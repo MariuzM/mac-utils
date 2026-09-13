@@ -1,6 +1,6 @@
-import SwiftUI
 import AppKit
 import FolderKit
+import SwiftUI
 
 struct HeaderBar: View {
     @ObservedObject var vm: ScanViewModel
@@ -8,10 +8,10 @@ struct HeaderBar: View {
     var body: some View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Mac Utils")
+                Text("Storage Cleaner")
                     .font(.headline)
-                if vm.hasScanned && !vm.isScanning {
-                    Text("\(ByteFormat.string(vm.totalReclaimable)) reclaimable · \(vm.totalItems) items")
+                if vm.hasScanned && !vm.isBusy {
+                    Text("\(ByteFormat.string(vm.totalReclaimable)) found · \(vm.totalItems) items")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 } else if vm.isDeleting {
@@ -32,7 +32,7 @@ struct HeaderBar: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 } else {
-                    Text("Preview mode — nothing is deleted")
+                    Text("Review accessible caches, logs, and developer files")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -74,7 +74,7 @@ struct HeaderBar: View {
                     }
                     .tint(.red)
                     .disabled(vm.selectedItems.isEmpty)
-                    .help("Remove the checked categories — asks whether to Trash or delete permanently")
+                    .help("Remove the checked items — asks whether to Trash or delete permanently")
 
                     Button {
                         vm.backup(items: vm.selectedItems)
@@ -82,7 +82,7 @@ struct HeaderBar: View {
                         Label("Back Up Selected", systemImage: "arrow.down.doc")
                     }
                     .disabled(vm.selectedItems.isEmpty)
-                    .help("Copy the checked categories to a folder on your Desktop, preserving original paths")
+                    .help("Copy the checked items to a folder on your Desktop, preserving original paths")
                 }
                 Button {
                     vm.startScan()
@@ -90,10 +90,10 @@ struct HeaderBar: View {
                     Label(vm.hasScanned ? "Rescan" : "Scan", systemImage: "magnifyingglass")
                 }
                 .keyboardShortcut("r", modifiers: .command)
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(PrimaryActionStyle())
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 28)
+        .padding(.vertical, 20)
     }
 }

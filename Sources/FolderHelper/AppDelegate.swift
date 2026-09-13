@@ -1,6 +1,6 @@
 import AppKit
-import SwiftUI
 import FolderKit
+import SwiftUI
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {

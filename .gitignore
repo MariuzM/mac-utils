@@ -5,3 +5,5 @@ dist/
 *.xcodeproj
 .swiftpm/
 .vscode/
+__pycache__/
+*.pyc

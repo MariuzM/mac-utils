@@ -1,5 +1,5 @@
-import Foundation
 import AppKit
+import Foundation
 import UniformTypeIdentifiers
 
 enum ExtensionCategory: String, CaseIterable, Identifiable, Hashable, Sendable {
@@ -36,9 +36,15 @@ enum ExtensionCategory: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .images:
             return ["jpg", "jpeg", "png", "gif", "heic", "webp", "tiff", "bmp", "svg", "ico", "psd"]
         case .documents:
-            return ["txt", "md", "rtf", "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "csv", "epub", "pages", "numbers", "key"]
+            return [
+                "txt", "md", "rtf", "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "csv", "epub", "pages",
+                "numbers", "key",
+            ]
         case .development:
-            return ["swift", "js", "jsx", "tsx", "py", "rb", "go", "rs", "java", "kt", "c", "cpp", "h", "cs", "php", "sh", "json", "yaml", "yml", "toml", "xml", "html", "css", "scss", "sql", "plist"]
+            return [
+                "swift", "js", "jsx", "ts", "tsx", "py", "rb", "go", "rs", "java", "kt", "c", "cpp", "h", "cs", "php",
+                "sh", "json", "yaml", "yml", "toml", "xml", "html", "css", "scss", "sql", "plist",
+            ]
         case .archives:
             return ["zip", "rar", "7z", "tar", "gz", "bz2", "xz", "dmg", "iso"]
         case .fonts:

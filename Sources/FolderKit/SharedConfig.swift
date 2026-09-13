@@ -38,14 +38,14 @@ public enum SharedConfig {
         )
     }
 
-    public static func observeConfigChanged(_ handler: @escaping () -> Void) -> NSObjectProtocol {
+    public static func observeConfigChanged(_ handler: @escaping @MainActor @Sendable () -> Void) -> NSObjectProtocol {
         DistributedNotificationCenter.default().addObserver(
             forName: configChanged,
             object: nil,
             queue: .main
         ) { notification in
             guard notification.object as? String != processToken else { return }
-            handler()
+            Task { @MainActor in handler() }
         }
     }
 }

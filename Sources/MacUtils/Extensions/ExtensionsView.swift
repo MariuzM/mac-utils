@@ -1,5 +1,5 @@
-import SwiftUI
 import AppKit
+import SwiftUI
 
 struct ExtensionsView: View {
     @ObservedObject var vm: ExtensionsViewModel
@@ -60,7 +60,7 @@ struct ExtensionsHeaderBar: View {
     var body: some View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Extensions")
+                Text("Default Apps")
                     .font(.headline)
                 Text(subtitle)
                     .font(.subheadline)
@@ -104,8 +104,8 @@ struct ExtensionsHeaderBar: View {
                 .help("Reload the current handlers from the system")
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 28)
+        .padding(.vertical, 20)
     }
 
     private var subtitle: String {

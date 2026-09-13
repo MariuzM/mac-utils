@@ -1,5 +1,5 @@
 import AppKit
-import ApplicationServices
+@preconcurrency import ApplicationServices
 
 struct DockFolderItem: Identifiable, Hashable {
     let title: String
@@ -9,6 +9,7 @@ struct DockFolderItem: Identifiable, Hashable {
     var id: String { url.path }
 }
 
+@MainActor
 enum DockAX {
     static var isTrusted: Bool { AXIsProcessTrusted() }
 
@@ -17,12 +18,12 @@ enum DockAX {
         _ = AXIsProcessTrustedWithOptions([key: true] as CFDictionary)
     }
 
-
     static func folderItems() -> [DockFolderItem] {
         guard isTrusted,
-              let pid = NSRunningApplication
-                  .runningApplications(withBundleIdentifier: "com.apple.dock")
-                  .first?.processIdentifier
+            let pid =
+                NSRunningApplication
+                .runningApplications(withBundleIdentifier: "com.apple.dock")
+                .first?.processIdentifier
         else { return [] }
 
         let dock = AXUIElementCreateApplication(pid)
@@ -35,8 +36,8 @@ enum DockAX {
             guard let children = attribute(list, kAXChildrenAttribute) as? [AXUIElement] else { continue }
             for child in children {
                 guard attribute(child, kAXSubroleAttribute) as? String == "AXFolderDockItem",
-                      let url = attribute(child, "AXURL") as? URL,
-                      let frame = frame(of: child)
+                    let url = attribute(child, "AXURL") as? URL,
+                    let frame = frame(of: child)
                 else { continue }
                 let title = attribute(child, kAXTitleAttribute) as? String ?? url.lastPathComponent
                 items.append(DockFolderItem(title: title, url: url, frame: frame))
@@ -57,18 +58,18 @@ enum DockAX {
 
     private static func frame(of element: AXUIElement) -> CGRect? {
         guard let rawPosition = attribute(element, kAXPositionAttribute),
-              let rawSize = attribute(element, kAXSizeAttribute)
+            let rawSize = attribute(element, kAXSizeAttribute)
         else { return nil }
 
         guard CFGetTypeID(rawPosition as CFTypeRef) == AXValueGetTypeID(),
-              CFGetTypeID(rawSize as CFTypeRef) == AXValueGetTypeID()
+            CFGetTypeID(rawSize as CFTypeRef) == AXValueGetTypeID()
         else { return nil }
 
         var origin = CGPoint.zero
         var size = CGSize.zero
         guard AXValueGetValue(rawPosition as! AXValue, .cgPoint, &origin),
-              AXValueGetValue(rawSize as! AXValue, .cgSize, &size),
-              size.width > 0, size.height > 0
+            AXValueGetValue(rawSize as! AXValue, .cgSize, &size),
+            size.width > 0, size.height > 0
         else { return nil }
         return CGRect(origin: origin, size: size)
     }

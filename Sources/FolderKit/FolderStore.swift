@@ -100,7 +100,7 @@ public final class FolderStore: ObservableObject {
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = true
         guard panel.runModal() == .OK else { return 0 }
-        panel.urls.forEach { pin($0) }
+        for url in panel.urls { pin(url) }
         return panel.urls.count
     }
 
@@ -114,7 +114,7 @@ public final class FolderStore: ObservableObject {
     }
 
     public func listing(of url: URL) -> FolderListing {
-        let keys: [URLResourceKey] = [.isDirectoryKey]
+        let keys: [URLResourceKey] = [.isDirectoryKey, .isPackageKey]
         do {
             let contents = try FileManager.default.contentsOfDirectory(
                 at: url,
@@ -135,7 +135,8 @@ public final class FolderStore: ObservableObject {
     private func sorted(_ contents: [URL]) -> [FolderEntry] {
         contents
             .map { child in
-                let isDirectory = (try? child.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+                let values = try? child.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])
+                let isDirectory = values?.isDirectory == true && values?.isPackage != true
                 return FolderEntry(url: child, isDirectory: isDirectory)
             }
             .sorted { a, b in
@@ -163,7 +164,8 @@ public final class FolderStore: ObservableObject {
         else {
             withPersistSuppressed { folders = [] }
             unreadableOnDisk = true
-            loadError = "Pinned folders could not be read. The existing file is left untouched — "
+            loadError =
+                "Pinned folders could not be read. The existing file is left untouched — "
                 + "fix or remove it rather than re-pinning, or your folders will be overwritten."
             return
         }
@@ -176,7 +178,7 @@ public final class FolderStore: ObservableObject {
         guard !unreadableOnDisk else { return }
         guard !suppressPersist, let data = try? JSONEncoder().encode(folders) else { return }
         do {
-            try data.write(to: fileURL)
+            try data.write(to: fileURL, options: .atomic)
         } catch {
             loadError = "Pinned folders could not be saved: \(error.localizedDescription)"
             return

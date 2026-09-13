@@ -1,5 +1,5 @@
-import FolderKit
 import AppKit
+import FolderKit
 
 enum ExternalApp: String, CaseIterable, Identifiable {
     case terminal = "com.apple.Terminal"
@@ -31,7 +31,8 @@ enum ExternalApp: String, CaseIterable, Identifiable {
 
     func open(_ entry: FolderEntry) {
         guard let app = applicationURL else { return }
-        let target = wantsDirectory && !entry.isDirectory
+        let target =
+            wantsDirectory && !entry.isDirectory
             ? entry.url.deletingLastPathComponent()
             : entry.url
         NSWorkspace.shared.open([target], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration())

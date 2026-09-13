@@ -1,6 +1,6 @@
-import SwiftUI
 import AppKit
 import FolderKit
+import SwiftUI
 
 struct VolumeSection: View {
     let volume: VolumeResult
@@ -122,16 +122,19 @@ struct CategoryRow: View {
                             Text(category.subtitle)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                                .lineLimit(1)
+                                .lineLimit(2)
+                                .help(category.subtitle)
                         }
                         Spacer()
                         Text(ByteFormat.string(category.totalSize))
                             .font(.body.monospacedDigit())
                             .foregroundStyle(.secondary)
-                        Text("\(category.items.count)")
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                            .frame(minWidth: 34, alignment: .trailing)
+                        Text(
+                            "\(category.items.filter { vm.isItemSelected($0, category: category) }.count)/\(category.items.count)"
+                        )
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(minWidth: 34, alignment: .trailing)
                     }
                     .contentShape(Rectangle())
                 }
@@ -148,31 +151,24 @@ struct CategoryRow: View {
                 .help("Back up this category to the Desktop")
 
                 Button {
-                    vm.requestDelete(items: category.items)
+                    vm.requestDelete(items: category.items.filter { vm.isItemSelected($0, category: category) })
                 } label: {
                     Image(systemName: "trash")
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.red)
-                .disabled(vm.isBusy)
-                .help("Delete this category")
+                .disabled(vm.isBusy || !category.items.contains { vm.isItemSelected($0, category: category) })
+                .help("Delete selected items in this category")
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
 
             if expanded {
-                VStack(spacing: 0) {
-                    ForEach(category.items.prefix(200)) { item in
-                        ItemRow(item: item)
+                LazyVStack(spacing: 0) {
+                    ForEach(category.items) { item in
+                        ItemRow(item: item, category: category, vm: vm)
                     }
-                    if category.items.count > 200 {
-                        Text("+ \(category.items.count - 200) more")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 38)
-                            .padding(.vertical, 6)
-                    }
+
                 }
                 .padding(.bottom, 6)
             }
@@ -182,9 +178,18 @@ struct CategoryRow: View {
 
 struct ItemRow: View {
     let item: ScanItem
+    let category: CategoryResult
+    @ObservedObject var vm: ScanViewModel
 
     var body: some View {
         HStack(spacing: 10) {
+            Toggle(
+                "Select \(item.name)",
+                isOn: Binding(
+                    get: { vm.isItemSelected(item, category: category) },
+                    set: { vm.setItemSelected(item, category: category, selected: $0) })
+            )
+            .labelsHidden().toggleStyle(.checkbox).disabled(vm.isBusy)
             Image(systemName: item.isDirectory ? "folder" : "doc")
                 .font(.caption)
                 .foregroundStyle(.secondary)
