@@ -18,19 +18,29 @@ struct FoldersView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                PageHeading(title: "Dock & folders", subtitle: "Manage Dock and menu bar folders.")
-                Surface { VStack(alignment: .leading, spacing: 14) { helperSection } }
-                Surface { VStack(alignment: .leading, spacing: 14) { dockSection } }
-                Surface { VStack(alignment: .leading, spacing: 14) { menuBarSection } }
-                Surface { VStack(alignment: .leading, spacing: 14) { pinnedSection } }
-
-                AboutFooter(component: "Mac Utils")
+        PageScaffold(title: AppSection.folders.title, subtitle: AppSection.folders.subtitle) {
+            StatusBadge(
+                title: helperRunning ? "Helper running" : "Helper stopped",
+                color: helperRunning ? .green : .secondary)
+            if helperRunning {
+                Button("Stop Helper") {
+                    HelperControl.stop()
+                    refreshSoon()
+                }
+            } else {
+                Button("Start Helper") {
+                    HelperControl.start()
+                    refreshSoon()
+                }
+                .buttonStyle(.borderedProminent)
             }
-            .padding(30)
-            .frame(maxWidth: 800, alignment: .leading)
-            .frame(maxWidth: .infinity)
+        } content: {
+            PageScroll(spacing: 20, maxWidth: 800) {
+                helperSection
+                dockSection
+                menuBarSection
+                pinnedSection
+            }
         }
         .onAppear {
             refresh()
@@ -58,211 +68,197 @@ struct FoldersView: View {
         }
     }
 
-    @ViewBuilder
     private var helperSection: some View {
-        Text("Background Helper")
-            .font(.headline)
-
-        Text(
-            "“Mac Utils Helper” by \(Developer.name) runs in the background so this window doesn't need to stay open. It owns the Dock override and the menu bar list."
-        )
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
-
-        HStack(spacing: 6) {
-            Circle()
-                .fill(helperRunning ? .green : .secondary)
-                .frame(width: 8, height: 8)
-            Text(helperRunning ? "Helper is running" : "Helper is not running")
-            Spacer()
-            if helperRunning {
-                Button("Stop") {
-                    HelperControl.stop()
-                    refreshSoon()
-                }
-            } else {
-                Button("Start") {
-                    HelperControl.start()
-                    refreshSoon()
-                }
-            }
-        }
-
-        Toggle(
-            "Start at login",
-            isOn: Binding(
-                get: { launchAtLogin },
-                set: { s in
-                    do {
-                        try HelperControl.setLaunchAtLogin(s)
-                        status = s ? "Helper will start at login" : "Helper removed from login items"
-                        if s { HelperControl.start() }
-                    } catch let e {
-                        status = e.localizedDescription
-                    }
-                    refreshSoon()
-                }
-            ))
-
-        if HelperControl.needsLoginApproval {
-            Button("Approve helper in Login Items…") { HelperControl.openLoginSettings() }
-        }
-
-        if HelperControl.helperURL == nil {
-            Label("Open the bundled Mac Utils app to use Dock Folders.", systemImage: "exclamationmark.triangle")
-                .font(.caption)
-                .foregroundStyle(.orange)
-        }
-
-        if let status {
-            Text(status)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    @ViewBuilder
-    private var dockSection: some View {
-        Text("Dock Folders")
-            .font(.headline)
-
-        Text(
-            "Clicking a checked folder in the Dock opens this list instead of the macOS stack, so you can right-click items inside it. Unchecked folders keep their normal behaviour."
-        )
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
-
-        if dockFolders.isEmpty {
-            Text("No folders found in your Dock")
-                .foregroundStyle(.secondary)
-        } else {
-            ForEach(dockFolders) { folder in
-                Toggle(
-                    isOn: Binding(
-                        get: { store.isDockOverridden(folder.url) },
-                        set: { s in store.setDockOverride(folder.url, enabled: s) }
+        VStack(alignment: .leading, spacing: 8) {
+            SectionHeader("Background Helper", symbol: "gearshape.2")
+            ListCard {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(
+                        "“Mac Utils Helper” by \(Developer.name) runs in the background so this window doesn't need to stay open. It owns the Dock override and the menu bar list."
                     )
-                ) {
-                    HStack(spacing: 8) {
-                        Image(nsImage: NSWorkspace.shared.icon(forFile: folder.url.path))
-                            .resizable()
-                            .frame(width: 16, height: 16)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(folder.label)
-                            Text(folder.url.path)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.head)
-                        }
-                    }
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
-                .toggleStyle(.checkbox)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                RowDivider()
+                SettingsToggle(
+                    title: "Start at login",
+                    caption: "Register the helper as a login item.",
+                    isOn: Binding(
+                        get: { launchAtLogin },
+                        set: { s in
+                            do {
+                                try HelperControl.setLaunchAtLogin(s)
+                                status = s ? "Helper will start at login" : "Helper removed from login items"
+                                if s { HelperControl.start() }
+                            } catch let e {
+                                status = e.localizedDescription
+                            }
+                            refreshSoon()
+                        }
+                    )
+                )
+                .padding(12)
+
+                if HelperControl.needsLoginApproval {
+                    RowDivider()
+                    HStack {
+                        Text("The helper needs approval in Login Items.").font(.callout)
+                        Spacer()
+                        Button("Open Login Items…") { HelperControl.openLoginSettings() }
+                            .controlSize(.small)
+                    }
+                    .padding(12)
+                }
             }
-        }
 
-        Button {
-            refresh()
-        } label: {
-            Label("Refresh Dock Folders", systemImage: "arrow.clockwise")
-        }
+            if HelperControl.helperURL == nil {
+                Notice(text: "Open the bundled Mac Utils app to use Dock Folders.", symbol: "exclamationmark.triangle")
+            }
 
-        if !store.dockOverrides.isEmpty && !helperRunning {
-            VStack(alignment: .leading, spacing: 6) {
-                Label("Helper is not running", systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
-                Text("Dock folders behave normally until the helper starts.")
+            if let status {
+                Text(status)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Button("Start Helper") {
-                    HelperControl.start()
-                    refreshSoon()
+                    .padding(.horizontal, 2)
+            }
+        }
+    }
+
+    private var dockSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionHeader("Dock Folders", symbol: "dock.rectangle", count: dockFolders.count) {
+                IconButton(systemName: "arrow.clockwise", help: "Refresh Dock folders") {
+                    refresh()
                 }
             }
-            .padding(10)
-            .background(RoundedRectangle(cornerRadius: 6).fill(.orange.opacity(0.12)))
-        } else if !store.dockOverrides.isEmpty && !helperTrusted {
-            VStack(alignment: .leading, spacing: 6) {
-                Label("Accessibility permission required", systemImage: "lock")
-                    .foregroundStyle(.orange)
-                Text(
-                    "The helper — “Mac Utils Helper (\(Developer.name))” — needs its own Accessibility access to intercept Dock clicks. This app doesn't need it."
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                HStack {
-                    Button("Ask Helper to Request Access") {
-                        HelperControl.start()
-                        SharedConfig.postConfigChanged()
-                        status =
-                            "Helper asked for Accessibility access — approve the prompt, or add it in System Settings."
+            Text(
+                "Clicking a checked folder in the Dock opens this list instead of the macOS stack, so you can right-click items inside it. Unchecked folders keep their normal behaviour."
+            )
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 2)
+
+            if !store.dockOverrides.isEmpty && !helperRunning {
+                VStack(alignment: .leading, spacing: 8) {
+                    Notice(
+                        text: "The helper is not running. Dock folders behave normally until the helper starts.",
+                        symbol: "exclamationmark.triangle")
+                }
+            } else if !store.dockOverrides.isEmpty && !helperTrusted {
+                VStack(alignment: .leading, spacing: 8) {
+                    Notice(
+                        text:
+                            "The helper — “Mac Utils Helper (\(Developer.name))” — needs its own Accessibility access to intercept Dock clicks. This app doesn't need it.",
+                        symbol: "lock")
+                    HStack {
+                        Button("Ask Helper to Request Access") {
+                            HelperControl.start()
+                            SharedConfig.postConfigChanged()
+                            status =
+                                "Helper asked for Accessibility access — approve the prompt, or add it in System Settings."
+                        }
+                        Button("Open Settings") { AccessibilitySettings.open() }
+                        Button("Reveal Helper") {
+                            if let helperURL = HelperControl.helperURL {
+                                NSWorkspace.shared.activateFileViewerSelecting([helperURL])
+                            }
+                        }
                     }
-                    Button("Open Settings") { AccessibilitySettings.open() }
-                    Button("Reveal Helper") {
-                        if let helperURL = HelperControl.helperURL {
-                            NSWorkspace.shared.activateFileViewerSelecting([helperURL])
+                    .controlSize(.small)
+                }
+            }
+
+            ListCard {
+                if dockFolders.isEmpty {
+                    Text("No folders found in your Dock")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                } else {
+                    ForEach(dockFolders) { folder in
+                        HStack(spacing: 10) {
+                            Toggle(
+                                "Override \(folder.label)",
+                                isOn: Binding(
+                                    get: { store.isDockOverridden(folder.url) },
+                                    set: { s in store.setDockOverride(folder.url, enabled: s) }
+                                )
+                            )
+                            .labelsHidden()
+                            .toggleStyle(.checkbox)
+                            FolderLabel(title: folder.label, path: folder.url.path)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        if folder.id != dockFolders.last?.id {
+                            RowDivider(leading: 40)
                         }
                     }
                 }
             }
-            .padding(10)
-            .background(RoundedRectangle(cornerRadius: 6).fill(.orange.opacity(0.12)))
         }
     }
 
-    @ViewBuilder
     private var menuBarSection: some View {
-        Text("Menu Bar")
-            .font(.headline)
-
-        Text(
-            "Browse pinned folders from the menu bar. Right-click any item to open it in Terminal, Ghostty or Visual Studio Code."
-        )
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
-
-        Toggle(
-            "Show Folders in the menu bar",
-            isOn: Binding(
-                get: { menuBarEnabled },
-                set: { s in
-                    menuBarEnabled = s
-                    SharedConfig.postConfigChanged()
-                }
-            ))
+        VStack(alignment: .leading, spacing: 8) {
+            SectionHeader("Menu Bar", symbol: "menubar.rectangle")
+            ListCard {
+                SettingsToggle(
+                    title: "Show Folders in the menu bar",
+                    caption:
+                        "Browse pinned folders from the menu bar. Right-click any item to open it in Terminal, Ghostty or Visual Studio Code.",
+                    isOn: Binding(
+                        get: { menuBarEnabled },
+                        set: { s in
+                            menuBarEnabled = s
+                            SharedConfig.postConfigChanged()
+                        }
+                    )
+                )
+                .padding(12)
+            }
+        }
     }
 
-    @ViewBuilder
     private var pinnedSection: some View {
-        Text("Pinned Folders")
-            .font(.headline)
+        VStack(alignment: .leading, spacing: 8) {
+            SectionHeader("Pinned Folders", symbol: "pin", count: store.folders.count) {
+                Button {
+                    store.pinFromOpenPanel()
+                } label: {
+                    Label("Add Folder", systemImage: "plus")
+                }
+                .controlSize(.small)
+            }
 
-        if let loadError = store.loadError {
-            Label(loadError, systemImage: "exclamationmark.triangle")
-                .font(.caption)
-                .foregroundStyle(.orange)
-        }
+            if let loadError = store.loadError {
+                Notice(text: loadError, symbol: "exclamationmark.triangle")
+            }
 
-        if store.folders.isEmpty {
-            Text("No folders pinned yet")
-                .foregroundStyle(.secondary)
-        } else {
-            ForEach(store.folders) { folder in
-                PinnedFolderRow(folder: folder) {
-                    store.unpin(folder)
+            ListCard {
+                if store.folders.isEmpty {
+                    Text("No folders pinned yet")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                } else {
+                    ForEach(store.folders) { folder in
+                        PinnedFolderRow(folder: folder) {
+                            store.unpin(folder)
+                        }
+                        if folder.id != store.folders.last?.id {
+                            RowDivider(leading: 40)
+                        }
+                    }
                 }
             }
         }
-
-        Button {
-            addFolder()
-        } label: {
-            Label("Add Folder", systemImage: "plus")
-        }
-    }
-
-    private func addFolder() {
-        store.pinFromOpenPanel()
     }
 
     private func refresh() {
@@ -274,34 +270,5 @@ struct FoldersView: View {
 
     private func refreshSoon() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { refresh() }
-    }
-}
-
-struct PinnedFolderRow: View {
-    let folder: PinnedFolder
-    let onDelete: () -> Void
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: folder.path))
-                .resizable()
-                .frame(width: 16, height: 16)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(folder.name)
-                Text(folder.path)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.head)
-            }
-
-            Spacer()
-
-            Button(role: .destructive, action: onDelete) {
-                Image(systemName: "trash")
-            }
-            .buttonStyle(.borderless)
-        }
     }
 }

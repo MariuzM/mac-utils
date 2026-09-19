@@ -1,24 +1,24 @@
 import AppKit
-import FolderKit
 import SwiftUI
 
 struct CleanerView: View {
     @ObservedObject var vm: ScanViewModel
 
     var body: some View {
-        VStack(spacing: 0) {
-            HeaderBar(vm: vm)
-            Divider()
+        PageScaffold(title: AppSection.cleaner.title, subtitle: subtitle) {
+            CleanerHeaderActions(vm: vm)
+        } banner: {
             FullDiskAccessBanner(vm: vm)
             ScanIssuesView(issues: vm.scanIssues, omittedCount: vm.omittedIssueCount)
-            Divider()
-            content
-            if vm.showConsole {
-                Divider()
-                ConsolePanel(vm: vm)
+        } content: {
+            VStack(spacing: 0) {
+                content
+                if vm.showConsole {
+                    Divider()
+                    ConsolePanel(vm: vm)
+                }
             }
         }
-        .frame(minWidth: 600, minHeight: 480)
         .onAppear { vm.refreshAccess() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             vm.refreshAccess()
@@ -65,8 +65,16 @@ struct CleanerView: View {
             }
             Button("OK", role: .cancel) {}
         } message: { result in
-            Text(adminMessage(result))
+            Text(result.message)
         }
+    }
+
+    private var subtitle: String {
+        if vm.isDeleting { return vm.deletePhase }
+        if vm.isBackingUp { return vm.backupPhase }
+        if vm.isScanning { return vm.phase }
+        if vm.hasScanned { return "\(ByteFormat.string(vm.totalReclaimable)) found · \(vm.totalItems) items" }
+        return AppSection.cleaner.subtitle
     }
 
     private func backupMessage(_ s: BackupSummary) -> String {
@@ -93,20 +101,28 @@ struct CleanerView: View {
         return parts.joined(separator: "\n\n")
     }
 
-    private func adminMessage(_ r: AdminDeleteResult) -> String { r.message }
-
     @ViewBuilder
     private var content: some View {
         if vm.volumes.isEmpty && !vm.isScanning {
-            EmptyState(hasScanned: vm.hasScanned) { vm.startScan() }
-        } else {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 20) {
-                    ForEach(vm.volumes) { volume in
-                        VolumeSection(volume: volume, vm: vm)
-                    }
+            EmptyStateView(
+                vm.hasScanned ? "No removable files found" : "Scan your Mac for removable files",
+                symbol: "sparkles",
+                message:
+                    "Review caches, logs, and developer files across your drives. Only safe categories are selected automatically."
+            ) {
+                Button {
+                    vm.startScan()
+                } label: {
+                    Label("Scan Now", systemImage: "magnifyingglass")
                 }
-                .padding(20)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+            }
+        } else {
+            PageScroll(spacing: 28) {
+                ForEach(vm.volumes) { volume in
+                    VolumeSection(volume: volume, vm: vm)
+                }
             }
         }
     }

@@ -9,6 +9,7 @@ struct MacUtilsApp: App {
     var body: some Scene {
         Window("Mac Utils", id: "main") {
             ContentView(folderStore: folderStore)
+                .frame(minWidth: 900, minHeight: 600)
                 .onAppear {
                     guard configObserver == nil else { return }
                     configObserver = SharedConfig.observeConfigChanged {
@@ -22,7 +23,11 @@ struct MacUtilsApp: App {
                     configObserver = nil
                 }
         }
-        .windowStyle(.titleBar)
+        .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1180, height: 800)
+
+        Settings {
+            SettingsView()
+        }
     }
 }

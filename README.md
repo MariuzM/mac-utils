@@ -1,35 +1,25 @@
 # Mac Utils
 
-Native SwiftUI utilities for macOS 27 (Golden Gate), built with Swift 6.4 and the macOS 27 SDK. The main app, Dock
-helper, and shared folder storage are separate Swift Package Manager targets.
+Native SwiftUI utilities for macOS 27 (Golden Gate), built with Swift 6.4 and the macOS 27 SDK.
+
+| Folder                | What it is                                               | Stack          |
+| --------------------- | -------------------------------------------------------- | -------------- |
+| `apps/mac/`           | Main app                                                 | Swift, SwiftUI |
+| `apps/folder-helper/` | Dock and menu bar helper, embedded in the main app       | Swift, AppKit  |
+| `shared/FolderKit/`   | Swift package with shared folder models and persistence  | Swift          |
+| `scripts/`            | Build script                                             | bash           |
 
 ## Build and run
 
-Select Xcode 27 with `xcode-select`. The scripts require Python 3 and either npm or Bun; there are no JavaScript
-dependencies to install. Version and build numbers come from `package.json`.
+Select Xcode 27 with `xcode-select`. Version and build numbers come from `package.json`. Run the command from the
+repository root:
 
 ```sh
 bun run build          # Signed release bundle: build/Mac Utils.app
-bun run start          # Open the built app
-bun run r              # Rebuild, stop the old app/helper, and open the new app
-bun run dev            # Swift executable without a bundle; Dock Folders needs the release bundle
-bun run check          # Strict Swift formatting, plist validation, and debug compilation
-bun run format         # Format Swift sources using the project's .swift-format
-bun run format:check   # Check formatting without changing files
-bun run clean          # Remove Swift build products and the app bundle
+open "build/Mac Utils.app"
 ```
 
-Every command also works with `npm run`, for example `npm run build`. The Makefile has been removed.
-
-Additional scripts:
-
-- `helper:start` / `helper:stop`: start or stop the bundled Dock helper.
-- `keys:status`: read the current HID mapping.
-- `keys:reset`: clear the active HID mapping; this does not remove an installed startup mapping.
-- `permissions:reset`: reset Accessibility grants for the app and helper.
-
-`r` rebuilds, then stops the old app and helper before opening the new app. Enable it again from Dock Folders if it is
-not registered to start at login. `build` alone does not launch or terminate either app.
+`build` does not launch or terminate the app or the helper.
 
 ## Features
 
@@ -106,21 +96,22 @@ signing/notarization workflow; these scripts do not notarize.
 ## Code structure
 
 ```text
-Sources/MacUtils/
-  App/          Window, navigation, overview
-  Design/       Shared colors, cards, typography, buttons
-  Cleaner/      Scan rules, engine, backup/removal, views
-  Leftovers/    Installed-app inventory and leftover review
-  Performance/  Process samples, suggestions, termination
-  Siri/         System adapter, controller, snapshots, view model, view
-  Spotlight/    Indexing exclusions
-  Keyboard/     HID mappings and startup persistence
-  Folders/      Helper management and folder preferences
-  Extensions/   File-type default applications
-  System/       Process execution, paths, permissions, deletion policy
-Sources/FolderKit/     Shared folder models and persistence
-Sources/FolderHelper/  Dock Accessibility integration and folder browser
-scripts/app.py        Package-script implementation and bundle signing
+apps/mac/MacUtils/
+  MacUtilsApp.swift  Window and Settings scenes
+  components/        Reusable views: sidebar/, theme/, and one folder per feature
+  data/              Static data: preference keys, scan rules, key lists
+  providers/         System access: scanning, deletion, processes, Siri, Spotlight, HID, helper
+  routes/            One screen per sidebar section, plus ContentView and settings/
+  stores/            Observable state for each screen and appearance preferences
+  styles/            Theme tokens
+  types/             Models and enums
+  utils/             Formatting, paths, deletion policy, window configuration
+apps/folder-helper/FolderHelper/
+  components/        Dock panel and folder menu
+  providers/         Dock Accessibility integration and event tap
+  types/             External app definitions
+shared/FolderKit/    Shared folder models and persistence
+scripts/build.sh     Builds both apps, assembles and signs the bundle
 ```
 
 The project uses Swift 6 concurrency checking. Process execution is centralized with bounded stdout/stderr collection,
@@ -129,7 +120,7 @@ administrator operations.
 
 ## Verification
 
-`bun run check` is the repeatable repository check. No test target is added to the shipping package. During this
+`bun run build` compiles both apps in release mode. No test target is added to the shipping package. During this
 refactor, a separate temporary Swift Testing harness exercised command execution, path protection, fixture deletion,
 package sizing, orphan detection, Spotlight parsing, Siri failure/recovery, process identity checks, and keyboard
 serialization. All nine pages were rendered offscreen in light and dark appearances. A live Siri disable/restore cycle
@@ -144,8 +135,8 @@ those outcomes.
 The access panel checks whether this process can read several protected user locations. It does not query or promise a
 global Full Disk Access grant. Missing probe folders are reported as unknown; denied locations are reported separately.
 Grant access to the exact bundled app shown by **Show App**, quit and reopen it, then rescan. An ad-hoc rebuild changes
-the app's signing identity, so an existing toggle can need removal and re-adding. `bun run dev` runs an unbundled
-executable and does not share the bundled app's identity.
+the app's signing identity, so an existing toggle can need removal and re-adding. `swift run` in `apps/mac` runs an
+unbundled executable and does not share the bundled app's identity.
 
 Full Disk Access, administrator authorization, filesystem permissions, file locks, read-only volumes, and SIP are
 different controls. No single grant bypasses all of them. Scans now report access/read errors instead of silently

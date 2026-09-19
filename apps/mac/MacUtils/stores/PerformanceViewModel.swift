@@ -52,12 +52,22 @@ enum ProcessTerminator {
 
 @MainActor
 final class PerformanceViewModel: ObservableObject {
-    @Published private(set) var samples: [ProcessSample] = []
+    @Published private(set) var samples: [ProcessSample] = [] {
+        didSet { rebuildVisible() }
+    }
     @Published private(set) var suggestions: [ProcessSuggestion] = []
+    @Published private(set) var visibleProcesses: [ProcessSample] = []
+    @Published private(set) var totalReclaimable: UInt64 = 0
     @Published private(set) var loaded = false
-    @Published var search = ""
-    @Published var sortKey: ProcessSortKey = .memory
-    @Published var showBackgroundOnly = false
+    @Published var search = "" {
+        didSet { if search != oldValue { rebuildVisible() } }
+    }
+    @Published var sortKey: ProcessSortKey = .memory {
+        didSet { if sortKey != oldValue { rebuildVisible() } }
+    }
+    @Published var showBackgroundOnly = false {
+        didSet { if showBackgroundOnly != oldValue { rebuildVisible() } }
+    }
     @Published var lastResult: TerminationResult?
     @Published var showResult = false
     @Published var pendingSuggestion: ProcessSuggestion?
@@ -72,28 +82,25 @@ final class PerformanceViewModel: ObservableObject {
     @Published private(set) var isTerminating = false
     private var iconCache: [URL: NSImage] = [:]
 
-    var totalReclaimable: UInt64 {
-        let pids = Set(suggestions.flatMap(\.pids))
-        return samples.filter { pids.contains($0.pid) }.reduce(0) { $0 + $1.residentBytes }
-    }
-
-    var visibleProcesses: [ProcessSample] {
-        let query = search.trimmingCharacters(in: .whitespaces).lowercased()
+    private func rebuildVisible() {
+        let query = search.trimmingCharacters(in: .whitespaces)
         let filtered = samples.filter { sample in
             if showBackgroundOnly && sample.role == .app { return false }
             guard !query.isEmpty else { return true }
-            return sample.name.lowercased().contains(query)
-                || (sample.bundleID?.lowercased().contains(query) ?? false)
-                || sample.executablePath.lowercased().contains(query)
+            return sample.name.localizedCaseInsensitiveContains(query)
+                || (sample.bundleID?.localizedCaseInsensitiveContains(query) ?? false)
+                || sample.executablePath.localizedCaseInsensitiveContains(query)
         }
+        let sorted: [ProcessSample]
         switch sortKey {
         case .memory:
-            return filtered.sorted { $0.residentBytes > $1.residentBytes }
+            sorted = filtered.sorted { $0.residentBytes > $1.residentBytes }
         case .cpu:
-            return filtered.sorted { $0.cpuPercent > $1.cpuPercent }
+            sorted = filtered.sorted { $0.cpuPercent > $1.cpuPercent }
         case .name:
-            return filtered.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            sorted = filtered.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         }
+        if sorted != visibleProcesses { visibleProcesses = sorted }
     }
 
     func start() {
@@ -130,9 +137,13 @@ final class PerformanceViewModel: ObservableObject {
             previousCPU = Dictionary(
                 withCPU.map { ($0.pid, $0.cpuNanos) }, uniquingKeysWith: { first, _ in first })
             lastSampledAt = Date()
+            let nextSuggestions = ProcessCatalog.suggestions(for: withCPU)
+            let suggestedPIDs = Set(nextSuggestions.flatMap(\.pids))
+            let reclaimable = withCPU.filter { suggestedPIDs.contains($0.pid) }.reduce(0) { $0 + $1.residentBytes }
             samples = withCPU
-            suggestions = ProcessCatalog.suggestions(for: withCPU)
-            loaded = true
+            if nextSuggestions != suggestions { suggestions = nextSuggestions }
+            if reclaimable != totalReclaimable { totalReclaimable = reclaimable }
+            if !loaded { loaded = true }
         }
     }
 

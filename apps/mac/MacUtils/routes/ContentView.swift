@@ -6,105 +6,118 @@ struct ContentView: View {
     @StateObject private var scanVM = ScanViewModel()
     @StateObject private var spotlightVM = SpotlightViewModel()
     @StateObject private var rekeyStore = MappingStore()
-    @StateObject private var extensionsVM = ExtensionsViewModel()
-    @StateObject private var performanceVM = PerformanceViewModel()
+    @State private var extensionsVM = ExtensionsViewModel()
+    @State private var performanceVM = PerformanceViewModel()
+    @State private var launchItemsVM = LaunchItemsViewModel()
     @StateObject private var leftoversVM = LeftoversViewModel()
     @StateObject private var siriVM = SiriViewModel()
-    @State private var selection: AppSection? = .overview
+    @AppStorage(PreferenceKey.selectedSection) private var selection = AppSection.overview
+    @AppStorage(PreferenceKey.sidebarWidth) private var storedSidebarWidth = Double(SidebarLayout.defaultWidth)
+    @AppStorage(PreferenceKey.layeredContent) private var layeredContent = false
+    @AppStorage(PreferenceKey.showBorders) private var showBorders = true
+    @State private var resizedSidebarWidth: CGFloat?
+    private let uiPreferences = UIAppearancePreferences.shared
 
     var body: some View {
-        HSplitView {
-            VStack(spacing: 0) {
-                HStack(spacing: 10) {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.title2.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 38, height: 38)
-                        .background(AppTheme.accent.gradient, in: RoundedRectangle(cornerRadius: 11))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Mac Utils").font(.headline)
-                    }
-                    Spacer()
+        GeometryReader { geometry in
+            let widthRange = sidebarWidthRange(availableWidth: geometry.size.width)
+            let sidebarWidth = SidebarLayout.clamp(
+                resizedSidebarWidth ?? CGFloat(storedSidebarWidth), to: widthRange)
+            ZStack(alignment: .leading) {
+                HStack(spacing: 0) {
+                    AppSidebar(selection: $selection, badge: badge(for:))
+                        .frame(width: sidebarWidth)
+                        .overlay(alignment: .trailing) {
+                            if showBorders && !layeredContent {
+                                Rectangle()
+                                    .fill(Color(nsColor: .separatorColor).opacity(0.6))
+                                    .frame(width: 1)
+                            }
+                        }
+                    detailSurface
                 }
-                .padding(18)
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 6) {
-                        navigationRow(.overview)
-                        sidebarGroup("MAINTENANCE", sections: AppSection.maintenance)
-                        sidebarGroup("YOUR MAC", sections: AppSection.controls)
-                    }
-                    .padding(.horizontal, 12)
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Label(
-                        "macOS \(ProcessInfo.processInfo.operatingSystemVersion.majorVersion)",
-                        systemImage: "desktopcomputer"
-                    )
-                    .font(.caption.weight(.medium))
-                    AboutFooter(component: "Mac Utils")
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(18)
+                SidebarResizeHandle(sidebarWidth: sidebarWidth, widthRange: widthRange, onResize: resizeSidebar)
+                    .frame(width: SidebarLayout.resizeHandleWidth)
+                    .frame(maxHeight: .infinity)
+                    .offset(x: sidebarWidth - SidebarLayout.resizeHandleWidth / 2)
+                    .zIndex(10)
             }
-            .frame(minWidth: 220, idealWidth: 235, maxWidth: 260, maxHeight: .infinity)
-            .background(.bar)
+        }
+        .ignoresSafeArea(.container, edges: .top)
+        .background {
+            SidebarBackground().ignoresSafeArea()
+        }
+        .tint(uiPreferences.accentColor)
+        .navigationTitle(selection.title)
+        .background(WindowConfigurator())
+    }
 
+    @ViewBuilder
+    private var detailSurface: some View {
+        if layeredContent {
+            let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+            detail
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(AppTheme.canvas)
+                .clipShape(shape)
+                .overlay { shape.strokeBorder(AppTheme.border) }
+                .shadow(color: .black.opacity(0.18), radius: 6, y: 2)
+                .padding([.top, .trailing, .bottom], 10)
+        } else {
             detail
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(AppTheme.canvas)
         }
-        .tint(AppTheme.accent)
-        .frame(minWidth: 1040, minHeight: 680)
-    }
-
-    private func sidebarGroup(_ title: String, sections: [AppSection]) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
-                .padding(.horizontal, 12).padding(.top, 20).padding(.bottom, 6)
-            ForEach(sections) { navigationRow($0) }
-        }
-    }
-
-    private func navigationRow(_ section: AppSection) -> some View {
-        Button {
-            selection = section
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: section.symbol)
-                    .symbolRenderingMode(.monochrome)
-                    .foregroundStyle(selection == section ? Color.white : Color.secondary)
-                    .frame(width: 18)
-                Text(section.title)
-            }
-            .font(.callout.weight(selection == section ? .semibold : .regular))
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 11)
-            .foregroundStyle(selection == section ? Color.white : Color.primary)
-            .background(
-                selection == section ? AppTheme.accent : Color.clear, in: RoundedRectangle(cornerRadius: 10)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 10))
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("navigation.\(section.rawValue)")
-        .accessibilityAddTraits(selection == section ? .isSelected : [])
     }
 
     @ViewBuilder
     private var detail: some View {
-        switch selection ?? .overview {
-        case .overview: OverviewView(scanVM: scanVM, siriVM: siriVM) { selection = $0 }
+        switch selection {
+        case .overview: OverviewView(scanVM: scanVM, siriVM: siriVM, leftoversVM: leftoversVM) { selection = $0 }
         case .cleaner: CleanerView(vm: scanVM)
         case .leftovers: LeftoversView(vm: leftoversVM)
         case .performance: PerformanceView(vm: performanceVM)
+        case .launchItems: LaunchItemsView(vm: launchItemsVM)
         case .siri: SiriView(vm: siriVM)
         case .spotlight: SpotlightView(vm: spotlightVM)
-        case .rekey: RekeyView(store: rekeyStore)
+        case .rekey: KeyboardView(store: rekeyStore)
         case .folders: FoldersView(store: folderStore)
         case .extensions: ExtensionsView(vm: extensionsVM)
+        }
+    }
+
+    private func badge(for section: AppSection) -> String? {
+        switch section {
+        case .cleaner:
+            guard scanVM.hasScanned, scanVM.totalReclaimable > 0 else { return nil }
+            return ByteFormat.string(scanVM.totalReclaimable)
+        case .leftovers:
+            guard leftoversVM.hasScanned, !leftoversVM.groups.isEmpty else { return nil }
+            return "\(leftoversVM.groups.reduce(0) { $0 + $1.items.count })"
+        case .spotlight:
+            guard spotlightVM.loaded, !spotlightVM.folders.isEmpty else { return nil }
+            return "\(spotlightVM.folders.count)"
+        case .rekey:
+            return rekeyStore.mappings.isEmpty ? nil : "\(rekeyStore.mappings.count)"
+        default:
+            return nil
+        }
+    }
+
+    private func sidebarWidthRange(availableWidth: CGFloat) -> ClosedRange<CGFloat> {
+        let upperBound = min(
+            SidebarLayout.maximumWidth,
+            max(SidebarLayout.minimumWidth, availableWidth - SidebarLayout.minimumDetailWidth)
+        )
+        return SidebarLayout.minimumWidth...upperBound
+    }
+
+    private func resizeSidebar(to width: CGFloat, isFinished: Bool) {
+        if isFinished {
+            storedSidebarWidth = Double(width)
+            resizedSidebarWidth = nil
+        } else {
+            resizedSidebarWidth = width
         }
     }
 }

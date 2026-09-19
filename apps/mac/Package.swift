@@ -2,24 +2,18 @@
 import PackageDescription
 
 let package = Package(
-    name: "mac-utils",
-    platforms: [
-        .macOS("27.0")
+    name: "MacUtils",
+    platforms: [.macOS("27.0")],
+    dependencies: [
+        .package(path: "../../shared/FolderKit")
     ],
     targets: [
-        .target(
-            name: "FolderKit",
-            path: "Sources/FolderKit"
-        ),
         .executableTarget(
             name: "MacUtils",
-            dependencies: ["FolderKit"],
-            path: "Sources/MacUtils"
-        ),
-        .executableTarget(
-            name: "FolderHelper",
-            dependencies: ["FolderKit"],
-            path: "Sources/FolderHelper"
-        ),
+            dependencies: [
+                .product(name: "FolderKit", package: "FolderKit")
+            ],
+            path: "MacUtils"
+        )
     ]
 )

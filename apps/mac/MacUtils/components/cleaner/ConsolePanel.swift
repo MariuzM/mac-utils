@@ -1,5 +1,3 @@
-import AppKit
-import FolderKit
 import SwiftUI
 
 struct ConsolePanel: View {
@@ -18,20 +16,15 @@ struct ConsolePanel: View {
                 }
                 Spacer()
                 Button("Clear") { vm.clearConsole() }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.link)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
-                Button {
+                IconButton(systemName: "xmark", help: "Hide console") {
                     vm.showConsole = false
-                } label: {
-                    Image(systemName: "xmark")
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help("Hide console")
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.leading, AppTheme.pagePadding)
+            .padding(.trailing, AppTheme.pagePadding - 6)
+            .padding(.vertical, 4)
             Divider()
 
             ScrollViewReader { proxy in
@@ -46,7 +39,7 @@ struct ConsolePanel: View {
                                 .id(i)
                         }
                     }
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, AppTheme.pagePadding)
                     .padding(.vertical, 6)
                 }
                 .onChange(of: vm.consoleLines.count) { _, _ in

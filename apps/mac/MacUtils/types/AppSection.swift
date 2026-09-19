@@ -1,7 +1,7 @@
 import Foundation
 
 enum AppSection: String, CaseIterable, Identifiable {
-    case overview, cleaner, leftovers, performance, siri, spotlight, rekey, folders, extensions
+    case overview, cleaner, leftovers, performance, launchItems, siri, spotlight, rekey, folders, extensions
 
     var id: String { rawValue }
 
@@ -11,6 +11,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .cleaner: "Storage Cleaner"
         case .leftovers: "App Leftovers"
         case .performance: "Performance"
+        case .launchItems: "Launch Items"
         case .siri: "Siri Controls"
         case .spotlight: "Spotlight Privacy"
         case .rekey: "Keyboard"
@@ -25,6 +26,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .cleaner: "internaldrive"
         case .leftovers: "trash.slash"
         case .performance: "waveform.path.ecg"
+        case .launchItems: "power"
         case .siri: "mic.slash"
         case .spotlight: "magnifyingglass"
         case .rekey: "keyboard"
@@ -39,6 +41,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .cleaner: "Find removable files. Review before you clean."
         case .leftovers: "Review files left by uninstalled apps."
         case .performance: "Understand what is running in the background."
+        case .launchItems: "Stop background jobs from starting."
         case .siri: "Disable Siri or restore previous settings."
         case .spotlight: "Choose what stays out of search."
         case .rekey: "Remap keys and configure startup mappings."
@@ -47,6 +50,6 @@ enum AppSection: String, CaseIterable, Identifiable {
         }
     }
 
-    static let maintenance: [Self] = [.cleaner, .leftovers, .performance]
+    static let maintenance: [Self] = [.cleaner, .leftovers, .performance, .launchItems]
     static let controls: [Self] = [.siri, .spotlight, .rekey, .folders, .extensions]
 }

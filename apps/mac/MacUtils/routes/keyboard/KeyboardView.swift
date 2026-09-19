@@ -1,81 +1,77 @@
 import SwiftUI
 
-struct RekeyView: View {
+struct KeyboardView: View {
     @ObservedObject var store: MappingStore
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                PageHeading(
-                    title: "Keyboard", subtitle: "Remap keys and keep your mappings at startup.")
-
-                Text(
-                    "Choose an action for each key. Apply it now, or keep your mappings at startup."
-                )
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-                if store.mappings.isEmpty {
-                    Text("No mappings yet")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach($store.mappings) { $mapping in
-                        MappingRow(mapping: $mapping, onChange: { store.commit() }) {
-                            store.remove(mapping)
+        PageScaffold(title: AppSection.rekey.title, subtitle: AppSection.rekey.subtitle) {
+            if store.isWorking { ProgressView().controlSize(.small) }
+            Button("Reset") { store.resetSystemMappings() }
+                .help("Clear the active key mapping")
+            Button("Apply") { store.apply() }
+                .buttonStyle(.borderedProminent)
+                .disabled(store.mappings.isEmpty)
+        } content: {
+            PageScroll(spacing: 16, maxWidth: 760) {
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionHeader("Mappings", symbol: "keyboard", count: store.mappings.count) {
+                        Button {
+                            store.add()
+                        } label: {
+                            Label("Add Mapping", systemImage: "plus")
+                        }
+                        .controlSize(.small)
+                    }
+                    ListCard {
+                        if store.mappings.isEmpty {
+                            Text("No mappings yet. Choose an action for each key, then apply it.")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(12)
+                        } else {
+                            ForEach($store.mappings) { $mapping in
+                                MappingRow(mapping: $mapping, onChange: { store.commit() }) {
+                                    store.remove(mapping)
+                                }
+                                if mapping.id != store.mappings.last?.id {
+                                    RowDivider()
+                                }
+                            }
                         }
                     }
                 }
 
-                Button {
-                    store.add()
-                } label: {
-                    Label("Add Mapping", systemImage: "plus")
-                }
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionHeader("Startup", symbol: "power")
+                    ListCard {
+                        SettingsToggle(
+                            title: "Apply mappings at startup",
+                            caption: "Install a launch daemon that restores these mappings when the Mac starts.",
+                            isOn: Binding(
+                                get: { store.startupEnabled },
+                                set: { s in store.setStartup(s) }
+                            )
+                        )
+                        .padding(12)
 
-                Divider()
-
-                HStack {
-                    Button("Apply") { store.apply() }
-                        .buttonStyle(PrimaryActionStyle())
-                        .disabled(store.mappings.isEmpty)
-                    Button("Reset") { store.resetSystemMappings() }
-                }
-
-                Toggle(
-                    "Apply mappings at startup",
-                    isOn: Binding(
-                        get: { store.startupEnabled },
-                        set: { s in store.setStartup(s) }
-                    ))
-
-                if store.startupStale {
-                    HStack(spacing: 6) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .foregroundStyle(.orange)
-                        Text("Startup daemon has older mappings")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Button("Update") { store.updateStartup() }
-                            .controlSize(.small)
-                    }
-                }
-
-                if store.hasLegacyDaemon {
-                    HStack(spacing: 6) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .foregroundStyle(.orange)
-                        Text("An older rekey daemon is still installed")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Button("Remove") { store.removeLegacyDaemon() }
-                            .controlSize(.small)
+                        if store.startupStale {
+                            RowDivider()
+                            warningRow("Startup daemon has older mappings", action: "Update") {
+                                store.updateStartup()
+                            }
+                        }
+                        if store.hasLegacyDaemon {
+                            RowDivider()
+                            warningRow("An older rekey daemon is still installed", action: "Remove") {
+                                store.removeLegacyDaemon()
+                            }
+                        }
                     }
                 }
 
                 if let warning = store.conflictWarning {
-                    Text(warning)
-                        .font(.caption)
-                        .foregroundStyle(.orange)
+                    Notice(text: warning, symbol: "exclamationmark.triangle")
                 }
 
                 if let status = store.status {
@@ -83,56 +79,27 @@ struct RekeyView: View {
                         Text(status)
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Button {
+                        IconButton(systemName: "xmark", help: "Dismiss") {
                             store.status = nil
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
                         }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.tertiary)
                     }
                 }
             }
-            .padding(30)
-            .frame(maxWidth: 760, alignment: .leading)
-            .frame(maxWidth: .infinity)
             .disabled(store.isWorking)
         }
     }
-}
 
-struct MappingRow: View {
-    @Binding var mapping: KeyMapping
-    let onChange: () -> Void
-    let onDelete: () -> Void
-
-    var body: some View {
-        HStack(spacing: 14) {
-            Picker("", selection: $mapping.source) {
-                ForEach(Keys.sources) { key in
-                    Text(key.name).tag(key)
-                }
-            }
-            .labelsHidden()
-            .onChange(of: mapping.source) { _, _ in onChange() }
-
-            Image(systemName: "arrow.right")
-                .foregroundStyle(.secondary)
-
-            Picker("", selection: $mapping.destination) {
-                ForEach(Keys.destinations) { key in
-                    Text(key.name).tag(key)
-                }
-            }
-            .labelsHidden()
-            .onChange(of: mapping.destination) { _, _ in onChange() }
-
-            Button(role: .destructive, action: onDelete) {
-                Image(systemName: "trash")
-            }
-            .buttonStyle(.borderless)
+    private func warningRow(_ text: String, action: String, perform: @escaping () -> Void) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle")
+                .foregroundStyle(.orange)
+            Text(text)
+                .font(.callout)
+            Spacer()
+            Button(action, action: perform)
+                .controlSize(.small)
         }
-        .padding(16)
-        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
     }
 }
