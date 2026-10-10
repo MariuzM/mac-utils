@@ -6,6 +6,9 @@ enum SystemPaths {
     static let hidutil = "/usr/bin/hidutil"
     static let launchctl = "/bin/launchctl"
     static let defaults = "/usr/bin/defaults"
+    static let killall = "/usr/bin/killall"
+    static let activateSettings =
+        "/System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings"
     static let coreSimulator = "/Library/Developer/CoreSimulator"
 }
 

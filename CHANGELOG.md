@@ -5,6 +5,20 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-10-10
+
+### Added
+
+- Desktop switching shortcuts on the Keyboard page.
+- `Restart Dock` button for unresponsive desktop shortcuts.
+- Launch Items page.
+- Settings window with accent color.
+
+### Changed
+
+- Sidebar navigation and page layout.
+- `bun run build` reveals the app in Finder.
+
 ## [0.8.0] - 2026-09-13
 
 ### Cleanup review

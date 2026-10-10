@@ -44,7 +44,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .launchItems: "Stop background jobs from starting."
         case .siri: "Disable Siri or restore previous settings."
         case .spotlight: "Choose what stays out of search."
-        case .rekey: "Remap keys and configure startup mappings."
+        case .rekey: "Remap keys and set desktop switching shortcuts."
         case .folders: "Manage Dock and menu bar folders."
         case .extensions: "Choose which apps open your files."
         }

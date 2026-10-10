@@ -2,6 +2,7 @@ import SwiftUI
 
 struct KeyboardView: View {
     @ObservedObject var store: MappingStore
+    @ObservedObject var desktopStore: DesktopShortcutStore
 
     var body: some View {
         PageScaffold(title: AppSection.rekey.title, subtitle: AppSection.rekey.subtitle) {
@@ -84,8 +85,65 @@ struct KeyboardView: View {
                         }
                     }
                 }
+
+                desktopSection
             }
             .disabled(store.isWorking)
+            .onAppear { desktopStore.reload() }
+        }
+    }
+
+    @ViewBuilder
+    private var desktopSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionHeader("Desktop Shortcuts", symbol: "rectangle.3.group", count: desktopStore.desktopCount) {
+                Menu("Preset") {
+                    ForEach(DesktopShortcutPreset.allCases) { preset in
+                        Button(preset.title) { desktopStore.apply(preset) }
+                    }
+                }
+                .fixedSize()
+                .controlSize(.small)
+                Button {
+                    desktopStore.restartDock()
+                } label: {
+                    Label("Restart Dock", systemImage: "arrow.clockwise")
+                }
+                .controlSize(.small)
+                .help("Restart the Dock if desktop shortcuts stop responding")
+            }
+            ListCard {
+                ForEach(desktopStore.shortcuts) { shortcut in
+                    DesktopShortcutRow(
+                        shortcut: Binding(
+                            get: { shortcut },
+                            set: { s in desktopStore.update(s) }
+                        ),
+                        exists: desktopStore.exists(shortcut)
+                    )
+                    if shortcut.id != desktopStore.shortcuts.last?.id {
+                        RowDivider()
+                    }
+                }
+            }
+            Text("Add desktops in Mission Control to configure more of them.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+
+        if let warning = desktopStore.warning(remappedKeys: Set(store.mappings.map(\.source.name))) {
+            Notice(text: warning, symbol: "exclamationmark.triangle")
+        }
+
+        if let status = desktopStore.status {
+            HStack(spacing: 6) {
+                Text(status)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                IconButton(systemName: "xmark", help: "Dismiss") {
+                    desktopStore.status = nil
+                }
+            }
         }
     }
 

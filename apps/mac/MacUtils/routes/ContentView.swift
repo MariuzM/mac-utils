@@ -6,6 +6,7 @@ struct ContentView: View {
     @StateObject private var scanVM = ScanViewModel()
     @StateObject private var spotlightVM = SpotlightViewModel()
     @StateObject private var rekeyStore = MappingStore()
+    @StateObject private var desktopShortcutStore = DesktopShortcutStore()
     @State private var extensionsVM = ExtensionsViewModel()
     @State private var performanceVM = PerformanceViewModel()
     @State private var launchItemsVM = LaunchItemsViewModel()
@@ -80,7 +81,7 @@ struct ContentView: View {
         case .launchItems: LaunchItemsView(vm: launchItemsVM)
         case .siri: SiriView(vm: siriVM)
         case .spotlight: SpotlightView(vm: spotlightVM)
-        case .rekey: KeyboardView(store: rekeyStore)
+        case .rekey: KeyboardView(store: rekeyStore, desktopStore: desktopShortcutStore)
         case .folders: FoldersView(store: folderStore)
         case .extensions: ExtensionsView(vm: extensionsVM)
         }

@@ -59,3 +59,5 @@ echo "Signing identity: $IDENTITY"
 if [[ "$IDENTITY" == "-" ]]; then
   echo "Ad-hoc build: macOS privacy permissions may need granting again after rebuilding."
 fi
+
+open -R "$APP"

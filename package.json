@@ -1,10 +1,10 @@
 {
   "name": "mac-utils",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "private": true,
   "description": "Native macOS 27 utilities",
   "config": {
-    "buildNumber": 8
+    "buildNumber": 9
   },
   "scripts": {
     "build": "bash scripts/build.sh"
